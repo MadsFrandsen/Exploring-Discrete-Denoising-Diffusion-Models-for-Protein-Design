@@ -29,3 +29,17 @@ def compute_transition_matrix(betas, T, num_bins=4):
         transition_matrices[t] = transition_matrix
 
     return transition_matrices
+
+def compute_acc_transition_matrices(T, transition_matrices):
+    accumulated_transition_matrices = torch.zeros(
+        (T, transition_matrices.shape[1], transition_matrices.shape[2])
+    )
+
+    accumulated_transition_matrices[0] = transition_matrices[0]
+
+    for t in range(1, T):
+        accumulated_transition_matrices[t] = torch.matmul(
+            accumulated_transition_matrices[t - 1], transition_matrices[t]
+        )
+    
+    return accumulated_transition_matrices
