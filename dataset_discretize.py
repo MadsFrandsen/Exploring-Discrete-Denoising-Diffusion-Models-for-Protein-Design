@@ -18,9 +18,11 @@ class DiscretizeMNIST(Dataset):
         )
     
     def discretize(self, data):
+        # get min and max value of the data
         min_val = torch.min(data)
         max_val = torch.max(data)
 
+        # get the bin size and discretize the data
         bin_size = (max_val - min_val) / self.num_bins
         data = torch.floor((data - min_val) / bin_size)
         data = torch.clamp(data, 0, self.num_bins - 1)
