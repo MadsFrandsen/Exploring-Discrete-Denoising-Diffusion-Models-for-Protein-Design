@@ -163,4 +163,32 @@ class ContextUnet(nn.Moduel):
 
 
     def forward(self, x, t, c=None):
-        pass
+        """
+        x : (batch, n_feat, h, w) : input image
+        t : (batch, n_cfeat)      : time step
+        c : (batch, n_classes)    : context label
+        """
+
+        x = x.permute(0, 2, 3, 1).long().squeeze(-1) # permute to (batch, h, w, n_feat)
+        x = self.embedding(x)
+        x = self.permute(0, 3, 2, 1).float()
+        x = self.init_conv(x)
+
+        down1 = self.down1(x)
+        down2 = self.down2(down1)
+
+        hiddenvec = self.to_vec(down2)
+
+        if c is None:
+            c = torch.zeros(x.shape[0], self.n_cfeat).to(x)
+        
+        cemb1 = self.contextembed1(c).view(-1, self.n_feat * 2, 1, 1)
+        temb1 = self.timeembed1(t).view(-1, self.n_feat * 2, 1, 1)
+        cemb2 = self.contextembed2(c).view(-1, self.n_feat, 1, 1)
+        temb2 = self.timeembed2(t).view(-1, self.n_feat, 1, 1)
+
+        up1 = self.up0(hiddenvec)
+        up2 = self.up1(cemb1 * up1 + temb1, down2)
+        up3 = self.up2(cemb2 * up2 + temb2, down1)
+        out = self.out(torch.cat((up3, x), 1))
+        return out
