@@ -7,17 +7,15 @@ from model import ContextUnet
 from torch.utils.data import DataLoader
 from D3PM import D3PM
 
-def generate_betas(T, beta_0=0.0001, beta_T=1, linear: bool = True):
+def generate_betas(T, beta_0=1e-5, beta_T=0.999, linear: bool = True):
 
     if linear:
         # linear schedule
         betas = torch.linspace(beta_0, beta_T, T)
     else:
         # consine schedule
-        betas = torch.zeros(T)
-        s = 0.008
-        for t in range(T):
-            betas[t] = torch.cos((t/T + s)/(1 + s) * torch.pi / 2)
+        betas = torch.linspace(torch.pi / 2, 0, T)
+        betas = torch.exp(betas) * (beta_T - beta_0) + beta_0
 
     return betas
 
