@@ -1,13 +1,24 @@
 import torch
+import torch.nn as nn
+import torch.nn.functional as F
 
+from tqdm import tqdm
+from model import ContextUnet
+from torch.utils.data import DataLoader
+from D3PM import D3PM
 
-def generate_betas(T, beta_0=0.0001, beta_T=1):
-    # betas = torch.zeros(T)
-    # s = 0.008
-    # for t in range(T):
-    #     betas[t] = torch.cos((t/T + s)/(1 + s) * torch.pi / 2)
+def generate_betas(T, beta_0=0.0001, beta_T=1, linear: bool = True):
 
-    betas = torch.linspace(beta_0, beta_T, T) # linear for now
+    if linear:
+        # linear schedule
+        betas = torch.linspace(beta_0, beta_T, T)
+    else:
+        # consine schedule
+        betas = torch.zeros(T)
+        s = 0.008
+        for t in range(T):
+            betas[t] = torch.cos((t/T + s)/(1 + s) * torch.pi / 2)
+
     return betas
 
 
@@ -43,3 +54,31 @@ def compute_acc_transition_matrices(T, transition_matrices):
         )
     
     return accumulated_transition_matrices
+
+
+def loss(logits, data, init_data, t):
+    
+    # logits = model(data.unsqueeze(1), t.unsqueeze(1))
+    
+    loss_vb = nn.CrossEntropyLoss(logits, data)
+    loss_init = 0.0 * nn.CrossEntropyLoss(logits, init_data)
+
+    loss = loss_vb + loss_init
+    
+    return loss, loss_vb, loss_init
+
+
+def train(model: D3PM, train_loader: DataLoader, epochs, optimizer):
+    model.train()
+
+    for e in range(1, epochs+1):
+        train_loss = 0
+        train_loss_vals = []
+        for batch_idx, (x, _) in tqdm(enumerate(train_loader), total=len(train_loader)):
+            x = x.to(model.device)
+
+            optimizer.zero_grad()
+            logits, _ = model(x)
+            l, l_vb, l_init = loss(logits, x, )
+    pass
+
