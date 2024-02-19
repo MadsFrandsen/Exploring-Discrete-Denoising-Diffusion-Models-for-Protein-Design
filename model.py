@@ -8,14 +8,13 @@ class ResidualConvBlock(nn.Module):
     ) -> None:
         super().__init__()
 
-        self.same_channels = in_channels = out_channels
-
+        self.same_channels = in_channels == out_channels
         self.is_res = is_res
 
         self.conv1 = nn.Sequential(
             nn.Conv2d(
                 in_channels=in_channels, out_channels=out_channels, 
-                kernel_size=3, stride=2, padding=1
+                kernel_size=3, stride=1, padding=1
             ), # 3x3 kernel with stride 1 and padding 1
             nn.BatchNorm2d(out_channels), # Batch normalization
             nn.GELU() # GELU activation function
@@ -24,7 +23,7 @@ class ResidualConvBlock(nn.Module):
         self.conv2 = nn.Sequential(
             nn.Conv2d(
                 in_channels=out_channels, out_channels=out_channels, 
-                kernel_size=3, stride=2, padding=1
+                kernel_size=3, stride=1, padding=1
             ), #  3x3 kernel with stride 1 and padding 1
             nn.BatchNorm2d(out_channels), # Batch normalization
             nn.GELU() # GELU activation function
@@ -134,7 +133,7 @@ class ContextUnet(nn.Module):
         self.nb_class = nb_class
 
         self.embedding = nn.Embedding(self.nb_class, in_channels)
-        self.init_conv = ResidualConvBlock(in_channels, n_feat, is_res=True)
+        self.init_conv = ResidualConvBlock(in_channels=in_channels, out_channels=n_feat, is_res=True)
 
         self.down1 = UnetDown(n_feat, n_feat)
         self.down2 = UnetDown(n_feat, 2 * n_feat)
@@ -147,8 +146,8 @@ class ContextUnet(nn.Module):
         self.contextembed2 = EmbedFC(n_cfeat, n_feat)
 
         self.up0 = nn.Sequential(
-            nn.ConvTranspose2d(2 * n_feat, 2 * n_feat, self.h//4),
-            nn.GroupNorm(8, 2 * n_feat),
+            nn.ConvTranspose2d(2 * n_feat, 2 * n_feat, self.h//4), #up-sample
+            nn.GroupNorm(8, 2 * n_feat), # normalize
             nn.ReLU()
         )
 
@@ -172,7 +171,8 @@ class ContextUnet(nn.Module):
 
         x = x.permute(0, 2, 3, 1).long().squeeze(-1) # permute to (batch, h, w, n_feat)
         x = self.embedding(x)
-        x = self.permute(0, 3, 2, 1).float()
+        x = x.permute(0, 3, 1, 2).float()
+        print(x.shape)
         x = self.init_conv(x)
 
         down1 = self.down1(x)

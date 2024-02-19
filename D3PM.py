@@ -8,7 +8,6 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 
 from model import ContextUnet
-from utils import *
 # from dataset_discretize import DiscretizeD3PMNIST
 
 
@@ -132,7 +131,7 @@ class D3PMTrainer(pl.LightningModule):
         optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)
 
         return optimizer
-            
+
 
 
 

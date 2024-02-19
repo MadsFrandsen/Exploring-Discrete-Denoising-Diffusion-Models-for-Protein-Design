@@ -5,7 +5,6 @@ import torch.nn.functional as F
 from tqdm import tqdm
 from model import ContextUnet
 from torch.utils.data import DataLoader
-from D3PM import D3PM
 # from dataset_discretize import DiscretizeD3PMNIST
 
 def generate_betas(T, beta_0=1e-5, beta_T=0.999, linear: bool = True):
