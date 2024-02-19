@@ -6,6 +6,7 @@ from tqdm import tqdm
 from model import ContextUnet
 from torch.utils.data import DataLoader
 from D3PM import D3PM
+# from dataset_discretize import DiscretizeD3PMNIST
 
 def generate_betas(T, beta_0=1e-5, beta_T=0.999, linear: bool = True):
 
@@ -39,7 +40,10 @@ def compute_transition_matrix(betas, T, num_bins=4):
 
     return transition_matrices
 
-def compute_acc_transition_matrices(T, transition_matrices):
+def compute_acc_transition_matrices(transition_matrices):
+
+    T = transition_matrices.shape[0]
+
     accumulated_transition_matrices = torch.zeros(
         (T, transition_matrices.shape[1], transition_matrices.shape[2])
     )
@@ -66,7 +70,7 @@ def loss(logits, data, init_data, t):
     return loss, loss_vb, loss_init
 
 
-def train(model: D3PM, train_loader: DataLoader, epochs, optimizer):
+def train(model: ContextUnet, train_loader: DataLoader, epochs, optimizer):
     model.train()
 
     for e in range(1, epochs+1):

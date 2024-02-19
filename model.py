@@ -103,7 +103,7 @@ class UnetDown(nn.Module):
         return self.model(x)
     
 
-class EmbedFC(nn.Moduel):
+class EmbedFC(nn.Module):
     def __init__(self, input_dim, emb_dim):
         super(EmbedFC, self).__init__()
 
@@ -122,11 +122,11 @@ class EmbedFC(nn.Moduel):
 
 
 
-class ContextUnet(nn.Moduel):
-    def __init__(self, device, in_channels: int, n_feat=256, n_cfeat=10, img_size=28, nb_class=3):
+class ContextUnet(nn.Module):
+    def __init__(self, in_channels: int, n_feat=256, n_cfeat=10, img_size=28, nb_class=3):
         super(ContextUnet, self).__init__()
 
-        self.device = device
+        # number of input channels, number of intermediate feature maps and number of classes
         self.in_channels = in_channels
         self.n_feat = n_feat
         self.n_cfeat = n_cfeat
