@@ -92,7 +92,7 @@ class UnetDown(nn.Module):
 
         layers = [
             ResidualConvBlock(in_channels, out_channels),
-            ResidualConvBlock(in_channels, out_channels),
+            ResidualConvBlock(out_channels, out_channels),
             nn.MaxPool2d(2)
         ]
 
@@ -172,7 +172,6 @@ class ContextUnet(nn.Module):
         x = x.permute(0, 2, 3, 1).long().squeeze(-1) # permute to (batch, h, w, n_feat)
         x = self.embedding(x)
         x = x.permute(0, 3, 1, 2).float()
-        print(x.shape)
         x = self.init_conv(x)
 
         down1 = self.down1(x)
