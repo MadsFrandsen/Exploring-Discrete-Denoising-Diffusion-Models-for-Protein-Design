@@ -1,6 +1,7 @@
 import torch
 import torch.nn.functional as F
-import numpy as np
+
+from . import utils
 
 
 
@@ -270,6 +271,13 @@ class DiscreteDiffusion:
             return x_init, final_x
         else:
             return final_x
+    
+
+    def vb_terms_bpd(self, model_fn, *, x_start, x_t, t):
+
+        true_logits = self.q_posterior_logits(x_start, x_t, t, x_start_logits=False)
+        model_logits, pred_x_start_logits = self.p_logits(model_fn, x=x_t, t=t)
+
 
 
 
