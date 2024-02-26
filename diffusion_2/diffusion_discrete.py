@@ -208,6 +208,69 @@ class DiscreteDiffusion:
         assert (model_logits.shape == 
                 pred_x_start_logits.shape == x.shape + (self.num_pixel_vals,))
         return model_logits, pred_x_start_logits
+    
+
+    def p_sample(self, model_fn, *, x, t, noise):
+        model_logits, pred_x_start_logits = self.p_logits(
+            model_fn=model_fn, x=x, t=t)
+        assert noise.shape == model_logits.shape, noise.shape
+
+        # No noise when t == 0
+        nonzero_mask = (t != 0).astype(x.dtype).reshape(x.shape[0],
+                                                        *([1] * (len(x.shape))))
+        noise = torch.clip(noise, min=torch.finfo(noise.dtype).tiny, max=1.)
+        gumbel_noise = -torch.log(-torch.log(noise))
+
+        sample = torch.argmax(model_logits + nonzero_mask * gumbel_noise, dim=-1)
+
+        assert sample.shape == x.shape
+        assert pred_x_start_logits.shape == model_logits.shape
+        return sample, F.softmax(pred_x_start_logits, dim=-1)
+
+
+    def p_sample_loop(self, model_fn, *, shape, rng_seed,
+                      num_timesteps=None, return_x_init=False):
+        torch.manual_seed(rng_seed)
+        rng = torch.Generator()
+        rng.manual_seed(rng_seed)
+
+        noise_shape = shape + (self.num_pixel_vals,)
+
+        def body_fun(i, x):
+            t = torch.full([shape[0]], self.num_timesteps - 1 - i)
+            x, _ = self.p_sample(
+                model_fn=model_fn,
+                x=x,
+                t=t,
+                noise=torch.rand(size=noise_shape, generator=rng)
+            )
+            return x
+        
+        if self.transition_mat_type in ['gaussian', 'uniform']:
+            x_init = torch.randint(low=0, high=self.num_pixel_vals,
+                                   size=shape, generator=rng)
+        elif self.transition_mat_type == 'absorbing':
+            x_init = torch.full(size=shape, fill_value=self.num_pixel_vals//2,
+                                dtype=torch.int32)
+        else:
+            raise ValueError(
+                f"transition_mat_type must be 'gaussian', 'uniform', 'absorbing' "
+                f", but is {self.transition_mat_type}"
+            )
+        
+        if num_timesteps is None:
+            num_timesteps = self.num_timesteps
+        
+        final_x = x_init
+        for i in range(num_timesteps):
+            final_x = body_fun(i, final_x)
+        
+        assert final_x.shape == shape
+        if return_x_init:
+            return x_init, final_x
+        else:
+            return final_x
+
 
 
 
