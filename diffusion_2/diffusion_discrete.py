@@ -74,6 +74,17 @@ class DiscreteDiffusion:
         del self.q_onestep_mats
 
     def _get_full_transition_mat(self, t):
+        """Computes transition matrix for q(x_t|x_{t-1}).
+
+        Contrary to the band diagonal version, this method constructs a transition
+        matrix with uniform probability to all other states.
+
+        Args:
+        t: timestep. integer scalar.
+
+        Returns:
+        Q_t: transition matrix. shape = (num_pixel_vals, num_pixel_vals).
+        """
         beta_t = self.betas[t]
         mat = torch.full(size=(self.num_pixel_vals, self.num_pixel_vals),
                         fill_value=beta_t / float(self.num_pixel_vals),
@@ -82,9 +93,22 @@ class DiscreteDiffusion:
         mat.fill_diagonal_(diag_val)
         return mat
 
-
     
     def _get_transition_mat(self, t: int):
+        """Computes transition matrix for q(x_t|x_{t-1}).
+
+        This method constructs a transition
+        matrix Q with
+        Q_{ij} = beta_t / num_pixel_vals       if |i-j| <= self.transition_bands
+                1 - \sum_{l \neq i} Q_{il} if i==j.
+                0                          else.
+
+        Args:
+        t: timestep. integer scalar (or tensor?)
+
+        Returns:
+        Q_t: transition matrix. shape = (num_pixel_vals, num_pixel_vals).
+        """
         if self.transition_bands is None:
             return self._get_full_transition_mat(t)
         
@@ -106,6 +130,18 @@ class DiscreteDiffusion:
     
 
     def _at(self, a, t, x):
+        """Extract coefficients at specified timesteps t and conditioning data x.
+
+        Args:
+        a: np.ndarray: plain NumPy float64 array of constants indexed by time.
+        t: jnp.ndarray: Jax array of time indices, shape = (batch_size,).
+        x: jnp.ndarray: jax array of shape (bs, ...) of int32 or int64 type.
+            (Noisy) data. Should not be of one hot representation, but have integer
+            values representing the class values.
+
+        Returns:
+        a[t, x]: jnp.ndarray: Jax array.
+        """
         a = a.to(dtype=self.torch_dtype)
         t_broadcast = t.unsqueeze(1).expand(-1, *x.shape[1:])
         
@@ -113,6 +149,18 @@ class DiscreteDiffusion:
     
     
     def _at_onehot(self, a, t, x):
+        """Extract coefficients at specified timesteps t and conditioning data x.
+
+        Args:
+        a: np.ndarray: plain NumPy float64 array of constants indexed by time.
+        t: jnp.ndarray: Jax array of time indices, shape = (bs,).
+        x: jnp.ndarray: jax array, shape (bs, ..., num_pixel_vals), float32 type.
+            (Noisy) data. Should be of one-hot-type representation.
+
+        Returns:
+        out: jnp.ndarray: Jax array. output of dot(x, a[t], axis=[[-1], [1]]).
+            shape = (bs, ..., num_pixel_vals)
+        """
         a = a.to(dtype=self.torch_dtype)
         t_indexed = a[t]
 
@@ -120,10 +168,34 @@ class DiscreteDiffusion:
     
 
     def q_probs(self, x_start, t):
+        """Compute probabilities of q(x_t | x_start).
+
+        Args:
+        x_start: jnp.ndarray: jax array of shape (bs, ...) of int32 or int64 type.
+            Should not be of one hot representation, but have integer values
+            representing the class values.
+        t: jnp.ndarray: jax array of shape (bs,).
+
+        Returns:
+        probs: jnp.ndarray: jax array, shape (bs, x_start.shape[1:],
+                                                num_pixel_vals).
+        """
         return self._at(self.q_mats, t, x_start)
     
 
     def q_sample(self, x_start, t, noise):
+        """Sample from q(x_t | x_start) (i.e. add noise to the data).
+
+        Args:
+        x_start: jnp.ndarray: original clean data, in integer form (not onehot).
+            shape = (bs, ...).
+        t: :jnp.ndarray: timestep of the diffusion process, shape (bs,).
+        noise: jnp.ndarray: uniform noise on [0, 1) used to sample noisy data.
+            Should be of shape (*x_start.shape, num_pixel_vals).
+
+        Returns:
+        sample: jnp.ndarray: same shape as x_start. noisy data.
+        """
         assert noise.shape == x_start.shape + (self.num_pixel_vals,)
         logits = torch.log(self.q_probs(x_start, t) + self.eps)
 
@@ -133,6 +205,7 @@ class DiscreteDiffusion:
     
 
     def _get_logits_from_logistic_pars(self, loc, log_scale):
+        """Computes logits for an underlying logistic distribution."""
 
         loc = torch.unsqueeze(loc, dim=-1)
         log_scale = torch.unsqueeze(log_scale, dim=-1)
@@ -182,6 +255,7 @@ class DiscreteDiffusion:
     
 
     def p_logits(self, model_fn, *, x, t):
+        """Compute logits of p(x_{t-1} | x_t)."""
         assert t.shape == (x.shape[0],)
         model_output = model_fn(x, t)
 
@@ -215,6 +289,7 @@ class DiscreteDiffusion:
     
 
     def p_sample(self, model_fn, *, x, t, noise):
+        """Sample one timestep from the model p(x_{t-1} | x_t)."""
         model_logits, pred_x_start_logits = self.p_logits(
             model_fn=model_fn, x=x, t=t)
         assert noise.shape == model_logits.shape, noise.shape
@@ -234,6 +309,7 @@ class DiscreteDiffusion:
 
     def p_sample_loop(self, model_fn, *, shape, rng_seed,
                       num_timesteps=None, return_x_init=False):
+        """Ancestral sampling."""
         torch.manual_seed(rng_seed)
         rng = torch.Generator()
         rng.manual_seed(rng_seed)
