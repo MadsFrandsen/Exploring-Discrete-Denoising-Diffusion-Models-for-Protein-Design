@@ -392,6 +392,44 @@ class DiscreteDiffusion:
         return losses
 
 
+    def calc_bpd_loop(self, model_fn, *, x_start, rng_seed):
+        """Calculate variational bound (loop over all timesteps and sum)."""
+        torch.manual_seed(rng_seed)
+        batch_size = x_start.shape[0]
+
+
+        # Initialize a tensor to store variational bounds for each timestep
+        vbterms_tb = torch.empty((self.num_timesteps, batch_size), dtype=torch.float32)
+
+        for t in range(self.num_timesteps):
+            # Set up RNG for this iteration. Each timestep gets a unique RNG state.
+            rng = torch.Generator()
+            rng.manual_seed(rng_seed + t)
+            
+            # Calculate VB term at the current timestep
+            noise = torch.rand(x_start.shape + (self.num_pixel_vals,), generator=rng)
+            vb, _ = self.vb_terms_bpd(
+                model_fn=model_fn, x_start=x_start, t=torch.full((batch_size,), t, dtype=torch.int32),
+                x_t=self.q_sample(x_start=x_start, t=torch.full((batch_size,), t, dtype=torch.int32), noise=noise)
+            )
+            vbterms_tb[t] = vb
+
+        vbterms_bt = vbterms_tb.transpose(0, 1)
+        assert vbterms_bt.shape == (batch_size, self.num_timesteps)
+
+        prior_b = self.prior_bpd(x_start=x_start)
+        total_b = vbterms_tb.sum(axis=0) + prior_b
+        assert prior_b.shape == total_b.shape == (batch_size,)
+
+        return {
+            'total': total_b,
+            'vbterms': vbterms_bt,
+            'prior': prior_b,
+        }
+
+
+
+
 
 
 
