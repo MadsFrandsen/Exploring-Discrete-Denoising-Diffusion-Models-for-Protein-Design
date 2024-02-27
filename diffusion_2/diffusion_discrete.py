@@ -27,10 +27,13 @@ class DiscreteDiffusion:
     """Discrete state space diffusion process."""
 
     def __init__(self, betas, transition_mat_type, num_bits, 
-                transition_bands, model_prediction, model_output, torch_dtype=torch.float32):
+                transition_bands, model_prediction, model_output, 
+                loss_type, hybrid_coeff, torch_dtype=torch.float32):
         
         self.model_prediction = model_prediction # x_start, xprev
         self.model_output = model_output # logits or logistic_pars
+        self.loss_type = loss_type # kl, hybrid, cross_entropy_x_start
+        self.hybrid_coeff = hybrid_coeff
         self.torch_dtype = torch_dtype
 
         self.num_bits = num_bits
@@ -304,12 +307,89 @@ class DiscreteDiffusion:
     
 
     def prior_bpd(self, x_start):
-        pass
+        """KL(q(x_{T-1}|x_start)|| U(x_{T-1}|0, num_pixel_vals-1))."""
+        q_probs = self.q_probs(
+            x_start=x_start,
+            t = torch.full((x_start.shape[0],), self.num_timesteps - 1))
+        
+        if self.transition_mat_type in ['gaussian', 'uniform']:
+            prior_probs = torch.ones_like(q_probs) / self.num_pixel_vals
+        
+        elif self.transition_mat_type == 'absorbing':
+            absorbing_int = torch.full(
+                size=q_probs.shape[:-1],
+                fill_value=self.num_pixel_vals//2,
+                dtype=torch.int32)
+            prior_probs = F.one_hot(absorbing_int,
+                                    num_classes=self.num_pixel_vals
+                                    ).to(torch.int32)
+        else:
+            raise ValueError(
+                f"transition_mat_type must be 'gaussian', 'uniform', 'absorbing' "
+                f", but is {self.transition_mat_type}"
+            )
+        
+        assert prior_probs.shape == q_probs.shape
+
+        kl_prior = utils.categorical_kl_probs(
+            q_probs, prior_probs)
+        assert kl_prior.shape == x_start.shape
+        return utils.meanflat(kl_prior) / torch.log(2.)
 
 
     def cross_entropy_start(self, x_start, pred_x_start_logits):
-        pass
+        """Calculate crossentropy between x_start and predicted x_start.
 
+        Args:
+        x_start: original clean data
+        pred_x_start_logits: predicted_logits
+
+        Returns:
+        ce: cross entropy.
+        """
+        ce = -utils.categorical_log_likelihood(x_start, pred_x_start_logits)
+        assert ce.shape == x_start.shape
+        ce = utils.meanflat(ce) / torch.log(2.)
+
+        assert ce.shape == (x_start.shape[0],)
+        return ce
+    
+
+    def training_losses(self, model_fn, *, x_start, rng):
+        """Training loss calculation."""
+
+        torch.manual_seed(rng)
+        noise_rng = torch.Generator().manual_seed(rng)
+        time_rng = torch.Generator().manual_seed(rng + 1)
+
+        noise = torch.rand(x_start.shape + (self.num_pixel_vals,), 
+                           generator=noise_rng)
+        t = torch.randint(0, self.num_timesteps, (x_start.shape[0],),
+                          dtype=torch.int32, generator=time_rng)
+        
+        x_t = self.q_sample(x_start=x_start, t=t, noise=noise)
+
+        if self.loss_type == 'kl':
+            losses, _ = self.vb_terms_bpd(
+                model_fn=model_fn, x_start=x_start, x_t=x_t, t=t)
+
+        elif self.loss_type == 'cross_entropy_x_start':
+            _, pred_x_start_logits = self.p_logits(model_fn, x=x_t, t=t)
+            losses = self.cross_entropy_start(
+                x_start=x_start, pred_x_start_logits=pred_x_start_logits)
+
+        elif self.loss_type == 'hybrid':
+            vb_losses, pred_x_start_logits = self.vb_terms_bpd(
+                model_fn=model_fn, x_start=x_start, x_t=x_t, t=t)
+            ce_losses = self.cross_entropy_start(
+                x_start=x_start, pred_x_start_logits=pred_x_start_logits)
+            losses = vb_losses + self.hybrid_coeff * ce_losses
+
+        else:
+            raise NotImplementedError(self.loss_type)
+        
+        assert losses.shape == t.shape
+        return losses
 
 
 
