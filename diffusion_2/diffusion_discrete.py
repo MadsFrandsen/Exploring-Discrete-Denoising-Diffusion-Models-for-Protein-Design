@@ -274,9 +274,41 @@ class DiscreteDiffusion:
     
 
     def vb_terms_bpd(self, model_fn, *, x_start, x_t, t):
+        """Calculate specified terms of the variational bound.
 
+        Args:
+            model_fn: the denoising network
+            x_start: original clean data
+            x_t: noisy data
+            t: timestep of the noisy data (and the corresponding term of the bound
+            to return)
+
+        Returns:
+            a pair `(kl, pred_start_logits)`, where `kl` are the requested bound terms
+            (specified by `t`), and `pred_x_start_logits` is logits of
+            the denoised image.
+        """
         true_logits = self.q_posterior_logits(x_start, x_t, t, x_start_logits=False)
         model_logits, pred_x_start_logits = self.p_logits(model_fn, x=x_t, t=t)
+
+        kl = utils.categorical_kl_logits(logits1=true_logits, logits2=model_logits)
+        assert kl.shape == x_start.shape
+        kl = utils.meanflat(kl) / torch.log(2.)
+
+        decoder_nll = -utils.categorical_log_likelihood(x_start, model_logits)
+        assert decoder_nll.shape == x_start.shape
+        decoder_nll = utils.meanflat(decoder_nll) / torch.log(2.)
+
+        assert kl.shape == decoder_nll.shape == t.shape == (x_start.shape[0],)
+        return torch.where(t == 0, decoder_nll, kl)
+    
+
+    def prior_bpd(self, x_start):
+        pass
+
+
+    def cross_entropy_start(self, x_start, pred_x_start_logits):
+        pass
 
 
 
