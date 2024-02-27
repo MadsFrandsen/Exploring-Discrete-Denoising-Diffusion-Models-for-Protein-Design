@@ -3,6 +3,12 @@ import torch.nn.functional as F
 
 
 
+def log_min_exp(a, b, epsilon=1.e-6):
+    """Computes the log(exp(a) - exp(b)) (b<a) in a numerically stable fashion."""
+    y = a + torch.log1p(-torch.exp(b - a) + epsilon)
+    return y
+
+
 def sample_categorical(logits, uniform_noise):
     """Samples from a categorical distribution.
 

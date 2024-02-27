@@ -148,11 +148,11 @@ class DiscreteDiffusion:
         
         bin_centers = bin_centers - loc
         log_cdf_min = F.logsigmoid(
-            -inv_scale * (bin_centers - 0.5 * bin_width))
+            inv_scale * (bin_centers - 0.5 * bin_width))
         log_cdf_plus = F.logsigmoid(
-            -inv_scale * (bin_centers + 0.5 * bin_width))
+            inv_scale * (bin_centers + 0.5 * bin_width))
         
-        logits = None
+        logits = utils.log_min_exp(log_cdf_plus, log_cdf_min, self.eps)
         return logits
 
 
