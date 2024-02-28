@@ -39,8 +39,8 @@ class DiscreteDiffusion:
         self.num_bits = num_bits
         # Data \in {0, ..., num_pixel_vals-1}
         self.num_pixel_vals = 2**self.num_bits
-        self.transition_bands = transition_bands
-        self.transition_mat_type = transition_mat_type
+        self.transition_bands = transition_bands #
+        self.transition_mat_type = transition_mat_type # uniform, gaussian etc.
         self.eps = 1.e-6
 
         self.betas = betas = betas.astype(torch.float64)
@@ -270,6 +270,8 @@ class DiscreteDiffusion:
             raise NotImplementedError(self.model_output)
         
         if self.model_prediction == 'x_start':
+             # Predict the logits of p(x_{t-1}|x_t) by parameterizing this distribution
+            # as ~ sum_{pred_x_start} q(x_{t-1}, x_t |pred_x_start)p(pred_x_start|x_t)
             pred_x_start_logits = model_logits
 
             t_broadcast = t.unsqueeze(1).expand(-1, *model_logits.shape[1:])
@@ -280,13 +282,21 @@ class DiscreteDiffusion:
                                         )
         
         elif self.model_prediction == 'xprev':
+            # Use the logits out of the model directly as the logits for
+            # p(x_{t-1}|x_t). model_logits are already set correctly.
+            # NOTE: the pred_x_start_logits in this case makes no sense.
+            # For Gaussian DDPM diffusion the model predicts the mean of
+            # p(x_{t-1}}|x_t), and uses inserts this as the eq for the mean of
+            # q(x_{t-1}}|x_t, x_0) to compute the predicted x_0/x_start.
+            # The equivalent for the categorical case is nontrivial.
             pred_x_start_logits = model_logits
             raise NotImplementedError(self.model_prediction)
         
         assert (model_logits.shape == 
                 pred_x_start_logits.shape == x.shape + (self.num_pixel_vals,))
         return model_logits, pred_x_start_logits
-    
+
+    # === Sampling ===
 
     def p_sample(self, model_fn, *, x, t, noise):
         """Sample one timestep from the model p(x_{t-1} | x_t)."""
@@ -295,8 +305,11 @@ class DiscreteDiffusion:
         assert noise.shape == model_logits.shape, noise.shape
 
         # No noise when t == 0
+        # NOTE: for t=0 this just "samples" from the argmax
+        #   as opposed to "sampling" from the mean in the gaussian case.
         nonzero_mask = (t != 0).astype(x.dtype).reshape(x.shape[0],
                                                         *([1] * (len(x.shape))))
+        # For numerical precision clip the noise to a minimum value
         noise = torch.clip(noise, min=torch.finfo(noise.dtype).tiny, max=1.)
         gumbel_noise = -torch.log(-torch.log(noise))
 
@@ -327,9 +340,13 @@ class DiscreteDiffusion:
             return x
         
         if self.transition_mat_type in ['gaussian', 'uniform']:
+            # Stationary distribution is a uniform distribution over all pixel values.
             x_init = torch.randint(low=0, high=self.num_pixel_vals,
                                    size=shape, generator=rng)
         elif self.transition_mat_type == 'absorbing':
+            # Stationary distribution is a kronecker delta distribution
+            # with all its mass on the absorbing state.
+            # Absorbing state is located at rgb values (128, 128, 128)
             x_init = torch.full(size=shape, fill_value=self.num_pixel_vals//2,
                                 dtype=torch.int32)
         else:
@@ -350,7 +367,8 @@ class DiscreteDiffusion:
             return x_init, final_x
         else:
             return final_x
-    
+
+    # === Log likelihood / loss calculation ===    
 
     def vb_terms_bpd(self, model_fn, *, x_start, x_t, t):
         """Calculate specified terms of the variational bound.
@@ -379,7 +397,7 @@ class DiscreteDiffusion:
         decoder_nll = utils.meanflat(decoder_nll) / torch.log(2.)
 
         assert kl.shape == decoder_nll.shape == t.shape == (x_start.shape[0],)
-        return torch.where(t == 0, decoder_nll, kl)
+        return torch.where(t == 0, decoder_nll, kl), pred_x_start_logits
     
 
     def prior_bpd(self, x_start):
@@ -389,9 +407,13 @@ class DiscreteDiffusion:
             t = torch.full((x_start.shape[0],), self.num_timesteps - 1))
         
         if self.transition_mat_type in ['gaussian', 'uniform']:
+            # Stationary distribution is a uniform distribution over all pixel values.
             prior_probs = torch.ones_like(q_probs) / self.num_pixel_vals
         
         elif self.transition_mat_type == 'absorbing':
+            # Stationary distribution is a kronecker delta distribution
+            # with all its mass on the absorbing state.
+            # Absorbing state is located at rgb values (128, 128, 128)
             absorbing_int = torch.full(
                 size=q_probs.shape[:-1],
                 fill_value=self.num_pixel_vals//2,
@@ -438,11 +460,14 @@ class DiscreteDiffusion:
         noise_rng = torch.Generator().manual_seed(rng)
         time_rng = torch.Generator().manual_seed(rng + 1)
 
+        # Add noise to data
         noise = torch.rand(x_start.shape + (self.num_pixel_vals,), 
                            generator=noise_rng)
         t = torch.randint(0, self.num_timesteps, (x_start.shape[0],),
                           dtype=torch.int32, generator=time_rng)
         
+        # t starts at zero. so x_0 is the first noisy datapoint, not the datapoint
+        # itself.
         x_t = self.q_sample(x_start=x_start, t=t, noise=noise)
 
         if self.loss_type == 'kl':

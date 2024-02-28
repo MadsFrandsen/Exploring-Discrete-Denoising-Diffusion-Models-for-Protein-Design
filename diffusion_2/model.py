@@ -1,194 +1,74 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
+import numpy as np
 
 
-class ResidualConvBlock(nn.Module):
-    def __init__(
-            self, in_channels: int, out_channels: int, is_res: bool = False
-    ) -> None:
+def get_timestep_embedding(timesteps, embedding_dim, 
+                           max_time=1000., dtype=torch.float32):
+    """Build sinusoidal embeddings (from Fairseq).
+
+    This matches the implementation in tensor2tensor, but differs slightly
+    from the description in Section 3.5 of "Attention Is All You Need".
+
+    Args:
+        timesteps: tensor: generate embedding vectors at these timesteps
+        embedding_dim: int: dimension of the embeddings to generate
+        max_time: float: largest time input
+        dtype: data type of the generated embeddings
+
+    Returns:
+        embedding vectors with shape `(len(timesteps), embedding_dim)`
+    """
+    assert len(timesteps.shape) == 1
+    timesteps *= (1000. / max_time)
+
+    half_dim = embedding_dim // 2
+    emb = torch.log(torch.tensor(10000, dtype=dtype)) / (half_dim - 1)
+    emb = torch.exp(torch.arange(half_dim, dtype=dtype) * -emb)
+    emb = timesteps.to(dtype)[:, None] * emb[None, :]
+    emb = torch.concatenate([torch.sin(emb), torch.cos(emb)], dim=1)
+    if embedding_dim % 2 == 1: #zero pad
+        emb = F.pad(emb, (0, 1, 0, 0))
+    assert emb.shape == (timesteps.shape[0], embedding_dim)
+    return emb
+
+
+def nearest_neighbor_upsample(x):
+    return F.interpolate(x, scale_factor=2, mode='nearest')
+
+
+class Normalize(nn.Module):
+    def __init__(self, num_groups=32, num_channels=None):
         super().__init__()
+        assert num_channels is not None
+        self.norm = nn.GroupNorm(num_groups=num_groups, num_channels=num_channels)
 
-        self.same_channels = in_channels == out_channels
-        self.is_res = is_res
-
-        self.conv1 = nn.Sequential(
-            nn.Conv2d(
-                in_channels=in_channels, out_channels=out_channels, 
-                kernel_size=3, stride=1, padding=1
-            ), # 3x3 kernel with stride 1 and padding 1
-            nn.BatchNorm2d(out_channels), # Batch normalization
-            nn.GELU() # GELU activation function
-        )
-
-        self.conv2 = nn.Sequential(
-            nn.Conv2d(
-                in_channels=out_channels, out_channels=out_channels, 
-                kernel_size=3, stride=1, padding=1
-            ), #  3x3 kernel with stride 1 and padding 1
-            nn.BatchNorm2d(out_channels), # Batch normalization
-            nn.GELU() # GELU activation function
-        )
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-
-        x1 = self.conv1(x)
-        x2 = self.conv2(x1)
-
-        # If using residual connection
-        if self.is_res:
-            # If input and output channels are the same, add residual connection directly
-            if self.same_channels:
-                out = x + x2
-            else:
-                # If not, apply a 1x1 convolutional layer to match dimensions before adding residual connection
-                shortcut = nn.Conv2d(
-                    x.shape[1], x2.shape[1], 
-                    kernel_size=1, stride=1, padding=0
-                ).to(x.device)
-                out = shortcut(x) + x2
-            
-            # Normalize output tensor by dividing by sqrt(2)
-            return out / 1.414
-        else:
-            return x2
-    
-    # Method to get the number of output channels for this block
-    def get_out_channels(self):
-        return self.conv2[0].out_channels
-    
-    # Method to set the number of output channels for this block
-    def set_out_channels(self, out_channels: int):
-        self.conv1[0].out_channels = out_channels
-        self.conv2[0].in_channels = out_channels
-        self.conv2[0].out_channels = out_channels
-
-
-
-class UnetUp(nn.Module):
-    def __init__(self, in_channels: int, out_channels: int):
-        super(UnetUp, self).__init__()
-
-        layers = [
-            nn.ConvTranspose2d(
-                in_channels=in_channels, out_channels=out_channels, 
-                kernel_size=2, stride=2, padding=0
-            ),
-            ResidualConvBlock(out_channels, out_channels),
-            ResidualConvBlock(out_channels, out_channels)
-        ]
-
-        self.model = nn.Sequential(*layers)
-    
-    def forward(self, x, skip):
-        x = torch.cat((x, skip), 1)
-
-        x = self.model(x)
-        return x
-
-
-class UnetDown(nn.Module):
-    def __init__(self, in_channels: int, out_channels: int):
-        super(UnetDown, self).__init__()
-
-        layers = [
-            ResidualConvBlock(in_channels, out_channels),
-            ResidualConvBlock(out_channels, out_channels),
-            nn.MaxPool2d(2)
-        ]
-
-        self.model = nn.Sequential(*layers)
-    
     def forward(self, x):
-        return self.model(x)
+        return self.norm(x)
+
+
+class ResnetBlock(nn.Moduel):
+    def __init__(self, in_channels, out_channels=None, dropout=0.0, use_bias=True):
+        super().__init__()
+        out_channels = out_channels or in_channels
+        self.norm1 = Normalize(num_channels=in_channels)
+        self.conv1 = nn.Conv2d(in_channels=in_channels, out_channels=out_channels,
+                               kernel_size=3, padding='same', bias=use_bias)
+        self.norm2 = Normalize(num_channels=out_channels)
+        self.dropout = nn.Dropout(p=dropout)
+        self.conv2 = nn.Conv2d(in_channels=out_channels, out_channels=out_channels,
+                               kernel_size=3, padding='same', bias=use_bias)
+        self.skip_proj = None
+        if in_channels != out_channels:
+            self.skip_proj = nn.Conv2d(in_channels, out_channels, kernel_size=1)
     
 
-class EmbedFC(nn.Module):
-    def __init__(self, input_dim, emb_dim):
-        super(EmbedFC, self).__init__()
-
-        self.input_dim = input_dim
-        layers = [
-            nn.Linear(input_dim, emb_dim),
-            nn.GELU(),
-            nn.Linear(emb_dim, emb_dim)
-        ]
-
-        self.model = nn.Sequential(*layers)
-    
-    def forward(self, x):
-        x = x.view(-1, self.input_dim)
-        return self.model(x)
+    def forward(x):
+        pass
 
 
 
-class ContextUnet(nn.Module):
-    def __init__(self, in_channels: int, n_feat=256, n_cfeat=10, img_size=28, nb_class=3):
-        super(ContextUnet, self).__init__()
-
-        # number of input channels, number of intermediate feature maps and number of classes
-        self.in_channels = in_channels
-        self.n_feat = n_feat
-        self.n_cfeat = n_cfeat
-        self.h = img_size #assume h == w. must be divisible by 4, so 28,24,20,16...
-        self.nb_class = nb_class
-
-        self.embedding = nn.Embedding(self.nb_class, in_channels)
-        self.init_conv = ResidualConvBlock(in_channels=in_channels, out_channels=n_feat, is_res=True)
-
-        self.down1 = UnetDown(n_feat, n_feat)
-        self.down2 = UnetDown(n_feat, 2 * n_feat)
-
-        self.to_vec = nn.Sequential(nn.AvgPool2d((4)), nn.GELU())
-
-        self.timeembed1 = EmbedFC(1, 2 * n_feat)
-        self.timeembed2 = EmbedFC(1, n_feat)
-        self.contextembed1 = EmbedFC(n_cfeat, 2 * n_feat)
-        self.contextembed2 = EmbedFC(n_cfeat, n_feat)
-
-        self.up0 = nn.Sequential(
-            nn.ConvTranspose2d(2 * n_feat, 2 * n_feat, self.h//4), #up-sample
-            nn.GroupNorm(8, 2 * n_feat), # normalize
-            nn.ReLU()
-        )
-
-        self.up1 = UnetUp(4 * n_feat, n_feat)
-        self.up2 = UnetUp(2 * n_feat, n_feat)
-
-        self.out = nn.Sequential(
-            nn.Conv2d(2 * n_feat, n_feat, 3, 1, 1),
-            nn.GroupNorm(8, n_feat),
-            nn.ReLU(),
-            nn.Conv2d(n_feat, nb_class, 3, 1, 1)
-        )
-
-
-    def forward(self, x, t, c=None):
-        """
-        x : (batch, n_feat, h, w) : input image
-        t : (batch, n_cfeat)      : time step
-        c : (batch, n_classes)    : context label
-        """
-
-        x = x.permute(0, 2, 3, 1).long().squeeze(-1) # permute to (batch, h, w, n_feat)
-        x = self.embedding(x)
-        x = x.permute(0, 3, 1, 2).float()
-        x = self.init_conv(x)
-
-        down1 = self.down1(x)
-        down2 = self.down2(down1)
-
-        hiddenvec = self.to_vec(down2)
-
-        if c is None:
-            c = torch.zeros(x.shape[0], self.n_cfeat).to(x)
         
-        cemb1 = self.contextembed1(c).view(-1, self.n_feat * 2, 1, 1)
-        temb1 = self.timeembed1(t).view(-1, self.n_feat * 2, 1, 1)
-        cemb2 = self.contextembed2(c).view(-1, self.n_feat, 1, 1)
-        temb2 = self.timeembed2(t).view(-1, self.n_feat, 1, 1)
 
-        up1 = self.up0(hiddenvec)
-        up2 = self.up1(cemb1 * up1 + temb1, down2)
-        up3 = self.up2(cemb2 * up2 + temb2, down1)
-        out = self.out(torch.cat((up3, x), 1))
-        return out
+        
