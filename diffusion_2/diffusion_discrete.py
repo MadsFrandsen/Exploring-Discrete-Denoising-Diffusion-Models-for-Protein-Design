@@ -43,9 +43,17 @@ class DiscreteDiffusion:
         self.transition_mat_type = transition_mat_type # uniform, gaussian etc.
         self.eps = 1.e-6
 
+        if not isinstance(betas, torch.Tensor):
+            raise ValueError('expected betas to be a torch Tensor')
+        if not ((betas > 0).all() and (betas <= 1).all()):
+            raise ValueError('betas must be in (0, 1]')
+
+        # Computations here in float64 for accuracy
         self.betas = betas = betas.astype(torch.float64)
         self.num_timesteps = betas.shape[0]
 
+        # Construct transition matrices for q(x_t|x_{t-1})
+        # NOTE: t goes from {0, ..., T-1}
         if self.transition_mat_type == 'uniform':
             q_one_step_mats = [self._get_transition_mat(t)
                                for t in range(0, self.num_timesteps)]
@@ -59,9 +67,11 @@ class DiscreteDiffusion:
                                              self.num_pixel_vals,
                                              self.num_pixel_vals)
         
+        # Construct transition matrices for q(x_t|x_start)
         q_mat_t = self.q_onestep_mats[0]
         q_mats = [q_mat_t]
         for t in range(1, self.num_timesteps):
+            # Q_{1...t} = Q_{1 ... t-1} Q_t = Q_1 Q_2 ... Q_t
             q_mat_t = torch.tensordot(q_mat_t, self.q_onestep_mats[t],
                                       dims=[[1], [0]])
             q_mats.append(q_mat_t)
@@ -69,6 +79,9 @@ class DiscreteDiffusion:
         assert self.q_mats.shape == (self.num_timesteps, self.num_pixel_vals,
                                      self.num_pixel_vals), self.q_mats.shape
         
+        # Don't precompute transition matrices for q(x_{t-1} | x_t, x_start)
+        # Can be computed from self.q_mats and self.q_one_step_mats.
+        # Only need transpose of q_onestep_mats for posterior computation.
         self.transpose_q_onestep_mats = self.q_onestep_mats.permute(0, 2, 1)
 
         del self.q_onestep_mats
@@ -111,7 +124,7 @@ class DiscreteDiffusion:
         """
         if self.transition_bands is None:
             return self._get_full_transition_mat(t)
-        
+        # Assumes num_off_diags < num_pixel_vals
         beta_t = self.betas[t]
 
         mat = torch.zeros((self.num_pixel_vals, self.num_pixel_vals),
@@ -133,18 +146,23 @@ class DiscreteDiffusion:
         """Extract coefficients at specified timesteps t and conditioning data x.
 
         Args:
-        a: np.ndarray: plain NumPy float64 array of constants indexed by time.
-        t: jnp.ndarray: Jax array of time indices, shape = (batch_size,).
-        x: jnp.ndarray: jax array of shape (bs, ...) of int32 or int64 type.
+        a: torch.Tensor: plain Torch float64 tensor of constants indexed by time.
+        t: torch.Tensor: Torch tensor of time indices, shape = (batch_size,).
+        x: torch.Tensor: Torch tensor of shape (bs, ...) of int32 or int64 type.
             (Noisy) data. Should not be of one hot representation, but have integer
             values representing the class values.
 
         Returns:
-        a[t, x]: jnp.ndarray: Jax array.
+        a[t, x]: torch.Tensor: Torch tensor.
         """
         a = a.to(dtype=self.torch_dtype)
         t_broadcast = t.unsqueeze(1).expand(-1, *x.shape[1:])
-        
+
+        # x.shape = (bs, height, width, channels)
+        # t_broadcast_shape = (bs, 1, 1, 1)
+        # a.shape = (num_timesteps, num_pixel_vals, num_pixel_vals)
+        # out.shape = (bs, height, width, channels, num_pixel_vals)
+        # out[i, j, k, l, m] = a[t[i, j, k, l], x[i, j, k, l], m]    
         return a[t_broadcast, x]
     
     
@@ -152,18 +170,21 @@ class DiscreteDiffusion:
         """Extract coefficients at specified timesteps t and conditioning data x.
 
         Args:
-        a: np.ndarray: plain NumPy float64 array of constants indexed by time.
-        t: jnp.ndarray: Jax array of time indices, shape = (bs,).
-        x: jnp.ndarray: jax array, shape (bs, ..., num_pixel_vals), float32 type.
+        a: torch.Tensor: plain Torch float64 tensor of constants indexed by time.
+        t: torch.Tensor: Torch tensor of time indices, shape = (bs,).
+        x: torch.Tensor: Torch tensor, shape (bs, ..., num_pixel_vals), float32 type.
             (Noisy) data. Should be of one-hot-type representation.
 
         Returns:
-        out: jnp.ndarray: Jax array. output of dot(x, a[t], axis=[[-1], [1]]).
+        out: torch.Tensor: Torch tensor. output of dot(x, a[t], axis=[[-1], [1]]).
             shape = (bs, ..., num_pixel_vals)
         """
         a = a.to(dtype=self.torch_dtype)
         t_indexed = a[t]
 
+        # x.shape = (bs, height, width, channels, num_pixel_vals)
+        # a[t]shape = (bs, num_pixel_vals, num_pixel_vals)
+        # out.shape = (bs, height, width, channels, num_pixel_vals)
         return torch.matmul(x, t_indexed.unsqueeze(1))
     
 
@@ -171,13 +192,13 @@ class DiscreteDiffusion:
         """Compute probabilities of q(x_t | x_start).
 
         Args:
-        x_start: jnp.ndarray: jax array of shape (bs, ...) of int32 or int64 type.
+        x_start: torch.Tensor: Torch tensor of shape (bs, ...) of int32 or int64 type.
             Should not be of one hot representation, but have integer values
             representing the class values.
-        t: jnp.ndarray: jax array of shape (bs,).
+        t: torch.Tensor: Torch tensor of shape (bs,).
 
         Returns:
-        probs: jnp.ndarray: jax array, shape (bs, x_start.shape[1:],
+        probs: torch.Tensor: Torch tensor, shape (bs, x_start.shape[1:],
                                                 num_pixel_vals).
         """
         return self._at(self.q_mats, t, x_start)
@@ -187,18 +208,19 @@ class DiscreteDiffusion:
         """Sample from q(x_t | x_start) (i.e. add noise to the data).
 
         Args:
-        x_start: jnp.ndarray: original clean data, in integer form (not onehot).
+        x_start: torch.Tensor: original clean data, in integer form (not onehot).
             shape = (bs, ...).
-        t: :jnp.ndarray: timestep of the diffusion process, shape (bs,).
-        noise: jnp.ndarray: uniform noise on [0, 1) used to sample noisy data.
+        t: :torch.Tensor: timestep of the diffusion process, shape (bs,).
+        noise: torch.Tensor: uniform noise on [0, 1) used to sample noisy data.
             Should be of shape (*x_start.shape, num_pixel_vals).
 
         Returns:
-        sample: jnp.ndarray: same shape as x_start. noisy data.
+        sample: torch.Tensor: same shape as x_start. noisy data.
         """
         assert noise.shape == x_start.shape + (self.num_pixel_vals,)
         logits = torch.log(self.q_probs(x_start, t) + self.eps)
 
+        # To avoid numerical issues clip the noise to a minimum value
         noise = torch.clip(noise, min=torch.finfo(noise.dtype).tiny, max=1.)
         gumbel_noise = -torch.log(-torch.log(noise))
         return torch.argmax(logits + gumbel_noise, axis=-1)
@@ -470,16 +492,20 @@ class DiscreteDiffusion:
         # itself.
         x_t = self.q_sample(x_start=x_start, t=t, noise=noise)
 
+        # Calculate the loss
         if self.loss_type == 'kl':
+            # Optimizes the variational bound L_vb.
             losses, _ = self.vb_terms_bpd(
                 model_fn=model_fn, x_start=x_start, x_t=x_t, t=t)
 
         elif self.loss_type == 'cross_entropy_x_start':
+            # Optimizes - sum_x_start x_start log pred_x_start.
             _, pred_x_start_logits = self.p_logits(model_fn, x=x_t, t=t)
             losses = self.cross_entropy_start(
                 x_start=x_start, pred_x_start_logits=pred_x_start_logits)
 
         elif self.loss_type == 'hybrid':
+            # Optimizes L_vb - lambda * sum_x_start x_start log pred_x_start.
             vb_losses, pred_x_start_logits = self.vb_terms_bpd(
                 model_fn=model_fn, x_start=x_start, x_t=x_t, t=t)
             ce_losses = self.cross_entropy_start(
