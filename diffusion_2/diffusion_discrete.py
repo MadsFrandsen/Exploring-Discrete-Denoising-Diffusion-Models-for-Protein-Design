@@ -159,6 +159,7 @@ class DiscreteDiffusion:
         t_broadcast = t_broadcast.expand_as(x)
 
         # t_broadcast = t.unsqueeze(1).expand(-1, *x.shape[1:])
+        # t_broadcast = t.unsqueeze(1).expand(-1, *out.shape[1:])
 
         # x.shape = (bs, height, width, channels)
         # t_broadcast_shape = (bs, 1, 1, 1)
@@ -274,7 +275,11 @@ class DiscreteDiffusion:
         # At t=0 we need the logits of q(x_{-1}|x_0, x_start)
         # where x_{-1} == x_start. This should be equal to the log of x_0.
         out = torch.log(fact1 + self.eps) + torch.log(fact2 + self.eps)
-        t_broadcast = t.unsqueeze(1).expand(-1, *out.shape[1:])
+        # t_broadcast = t.unsqueeze(1).expand(-1, *out.shape[1:])
+
+        t_broadcast = t.unsqueeze(1).unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)
+        t_broadcast = t_broadcast.expand_as(out)
+
         return torch.where(t_broadcast == 0, tzero_logits, out)
     
 

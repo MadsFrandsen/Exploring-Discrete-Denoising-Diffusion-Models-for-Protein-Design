@@ -2,6 +2,14 @@ import torch
 import torch.nn.functional as F
 
 
+def normalize_data(x, mode=None):
+    if mode is None or mode == 'rgb':
+        return x / 127.5 - 1.
+    elif mode == 'rgb_unit_var':
+        return 2. * normalize_data(x, mode='rgb')
+    else:
+        raise NotImplementedError(mode)
+
 
 def log_min_exp(a, b, epsilon=1.e-6):
     """Computes the log(exp(a) - exp(b)) (b<a) in a numerically stable fashion."""

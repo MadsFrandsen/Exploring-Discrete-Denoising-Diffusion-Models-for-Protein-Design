@@ -124,6 +124,8 @@ import torch.nn.functional as F
 
 from labml_helpers.module import Module
 
+import utils
+
 
 class Swish(Module):
     """
@@ -501,6 +503,8 @@ class UNet(Module):
         """
 
         x_onehot = F.one_hot(x, num_classes=self.num_pixel_vals)
+        # Convert to float and scale image to [-1, 1]
+        x = utils.normalize_data(x.float())
 
         # Get time-step embeddings
         t = self.time_emb(t)
@@ -525,6 +529,8 @@ class UNet(Module):
             else:
                 # Get the skip connection from first half of U-Net and concatenate
                 s = h.pop()
+                print("s shape: ",s.shape)
+                print("x shape: ",x.shape)
                 x = torch.cat((x, s), dim=1)
                 #
                 x = m(x, t)
