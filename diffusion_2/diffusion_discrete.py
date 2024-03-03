@@ -1,7 +1,6 @@
 import torch
 import torch.nn.functional as F
-
-from . import utils
+import utils
 
 
 
@@ -15,7 +14,7 @@ def generate_betas(start: float, stop: float, num_steps: int, type: str):
             torch.arange(num_steps + 1, dtype=torch.float64) / num_steps
         )
         alpha_bar = torch.cos((steps + 0.008) / 1.008 * torch.pi / 2)
-        betas = torch.minimum( 1 - alpha_bar[1:] / alpha_bar[:-1], 0.999)
+        betas = torch.minimum(1 - alpha_bar[1:] / alpha_bar[:-1], torch.tensor(0.999))
         return betas
     elif type == 'jsd':
         return 1. / torch.linspace(num_steps, 1., num_steps)
@@ -39,7 +38,7 @@ class DiscreteDiffusion:
         self.num_bits = num_bits
         # Data \in {0, ..., num_pixel_vals-1}
         self.num_pixel_vals = 2**self.num_bits
-        self.transition_bands = transition_bands #
+        self.transition_bands = transition_bands # None
         self.transition_mat_type = transition_mat_type # uniform, gaussian etc.
         self.eps = 1.e-6
 
@@ -49,7 +48,7 @@ class DiscreteDiffusion:
             raise ValueError('betas must be in (0, 1]')
 
         # Computations here in float64 for accuracy
-        self.betas = betas = betas.astype(torch.float64)
+        self.betas = betas = torch.tensor(betas, dtype=torch.float64)
         self.num_timesteps = betas.shape[0]
 
         # Construct transition matrices for q(x_t|x_{t-1})
@@ -329,8 +328,7 @@ class DiscreteDiffusion:
         # No noise when t == 0
         # NOTE: for t=0 this just "samples" from the argmax
         #   as opposed to "sampling" from the mean in the gaussian case.
-        nonzero_mask = (t != 0).astype(x.dtype).reshape(x.shape[0],
-                                                        *([1] * (len(x.shape))))
+        nonzero_mask = (t != 0).type(x.dtype).view(x.shape[0], *([1] * (len(x.shape))))
         # For numerical precision clip the noise to a minimum value
         noise = torch.clip(noise, min=torch.finfo(noise.dtype).tiny, max=1.)
         gumbel_noise = -torch.log(-torch.log(noise))

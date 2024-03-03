@@ -407,15 +407,19 @@ class UNet(Module):
     def __init__(self, image_channels: int = 3, n_channels: int = 64,
                  ch_mults: Union[Tuple[int, ...], List[int]] = (1, 2, 2, 4),
                  is_attn: Union[Tuple[bool, ...], List[bool]] = (False, False, True, True),
-                 n_blocks: int = 2):
+                 n_blocks: int = 2, model_output: str = 'logistic_pars'):
         """
         * `image_channels` is the number of channels in the image. $3$ for RGB.
         * `n_channels` is number of channels in the initial feature map that we transform the image into
         * `ch_mults` is the list of channel numbers at each resolution. The number of channels is `ch_mults[i] * n_channels`
         * `is_attn` is a list of booleans that indicate whether to use attention at each resolution
         * `n_blocks` is the number of `UpDownBlocks` at each resolution
+        * `model_output` is the type of output of the model
         """
         super().__init__()
+
+        # output type
+        self.model_output = model_output
 
         # Number of resolutions
         n_resolutions = len(ch_mults)
@@ -506,6 +510,20 @@ class UNet(Module):
                 x = torch.cat((x, s), dim=1)
                 #
                 x = m(x, t)
+        
+        # x = self.act(self.norm(x))
+
+        # if self.model_output == 'logistic_pars':
+        #     pass
+        
+        # elif self.model_output == 'logits':
+        #     pass
+
+        # else:
+        #     raise ValueError(
+        #         f'self.model_output = {self.model_output} but must be '
+        #         'logits or logistic_pars')
+
 
         # Final normalization and convolution
         return self.final(self.act(self.norm(x)))
