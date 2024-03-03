@@ -3,7 +3,7 @@ import torchvision
 import torchvision.transforms as transforms
 
 from torch.utils.data import Dataset
-from utils import *
+from diffusion_1.utils2 import *
 
 
 class DiscretizeMNIST(Dataset):

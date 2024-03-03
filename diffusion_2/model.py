@@ -120,6 +120,7 @@ from typing import Optional, Tuple, Union, List
 
 import torch
 from torch import nn
+import torch.nn.functional as F
 
 from labml_helpers.module import Module
 
@@ -407,7 +408,8 @@ class UNet(Module):
     def __init__(self, image_channels: int = 3, n_channels: int = 64,
                  ch_mults: Union[Tuple[int, ...], List[int]] = (1, 2, 2, 4),
                  is_attn: Union[Tuple[bool, ...], List[bool]] = (False, False, True, True),
-                 n_blocks: int = 2, model_output: str = 'logistic_pars'):
+                 n_blocks: int = 2, model_output: str = 'logistic_pars', 
+                 num_pixel_vals: int = 256):
         """
         * `image_channels` is the number of channels in the image. $3$ for RGB.
         * `n_channels` is number of channels in the initial feature map that we transform the image into
@@ -418,8 +420,14 @@ class UNet(Module):
         """
         super().__init__()
 
-        # output type
+        # Output type
         self.model_output = model_output
+        
+        # Number of pixel values, for instance [0, ..., 255] for MNIST
+        self.num_pixel_vals = num_pixel_vals
+
+        # Image channels
+        self.image_channels = image_channels
 
         # Number of resolutions
         n_resolutions = len(ch_mults)
@@ -476,13 +484,23 @@ class UNet(Module):
         # Final normalization and convolution layer
         self.norm = nn.GroupNorm(8, n_channels)
         self.act = Swish()
-        self.final = nn.Conv2d(in_channels, image_channels, kernel_size=(3, 3), padding=(1, 1))
+
+        self.final = nn.Conv2d(in_channels, 
+            image_channels * 2 if model_output == 'logistic_pars' else image_channels * self.num_pixel_vals,
+            kernel_size=(3, 3), padding=(1, 1))
+
+        # if model_output == "logistic_pars":
+        #     self.final = nn.Conv2d(in_channels, image_channels, kernel_size=(3, 3), padding=(1, 1))
+        # else:
+        #     self.final = nn.Conv2d(in_channels, image_channels * self.num_pixel_vals, kernel_size=(3, 3), padding=(1, 1))
 
     def forward(self, x: torch.Tensor, t: torch.Tensor):
         """
         * `x` has shape `[batch_size, in_channels, height, width]`
         * `t` has shape `[batch_size]`
         """
+
+        x_onehot = F.one_hot(x, num_classes=self.num_pixel_vals)
 
         # Get time-step embeddings
         t = self.time_emb(t)
@@ -511,19 +529,19 @@ class UNet(Module):
                 #
                 x = m(x, t)
         
-        # x = self.act(self.norm(x))
-
-        # if self.model_output == 'logistic_pars':
-        #     pass
-        
-        # elif self.model_output == 'logits':
-        #     pass
-
-        # else:
-        #     raise ValueError(
-        #         f'self.model_output = {self.model_output} but must be '
-        #         'logits or logistic_pars')
-
-
         # Final normalization and convolution
-        return self.final(self.act(self.norm(x)))
+        x = self.final(self.act(self.norm(x)))
+
+        if self.model_output == 'logistic_pars':
+            loc, log_scale = torch.chunk(x, 2, dim=1)
+            loc = torch.tanh(loc)
+            return loc, log_scale
+        
+        elif self.model_output == 'logits':
+            x = x.reshape(x.shape[0], x.shape[2], x.shape[3], self.image_channels, self.num_pixel_vals)
+            return x_onehot + x
+
+        else:
+            raise ValueError(
+                f'self.model_output = {self.model_output} but must be '
+                'logits or logistic_pars')

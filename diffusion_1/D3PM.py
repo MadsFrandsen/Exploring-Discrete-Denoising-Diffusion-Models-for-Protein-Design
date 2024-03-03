@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 
 from tqdm import tqdm
 
-from model import ContextUnet
+from diffusion_1.model2 import ContextUnet
 # from dataset_discretize import DiscretizeD3PMNIST
 
 

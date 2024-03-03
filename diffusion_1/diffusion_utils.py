@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from tqdm import tqdm
-from model import ContextUnet
+from diffusion_1.model2 import ContextUnet
 
 def loss(model: ContextUnet, logits, data, init_data, t):
     
