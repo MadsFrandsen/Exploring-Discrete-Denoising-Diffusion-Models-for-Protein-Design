@@ -28,7 +28,9 @@ class DiscreteDiffusion:
 
     def __init__(self, betas, transition_mat_type, num_bits, 
                 transition_bands, model_prediction, model_output, 
-                loss_type, hybrid_coeff, torch_dtype=torch.float32):
+                loss_type, hybrid_coeff, device, torch_dtype=torch.float32):
+        
+        self.device = device
         
         self.model_prediction = model_prediction # x_start, xprev
         self.model_output = model_output # logits or logistic_pars
@@ -104,7 +106,7 @@ class DiscreteDiffusion:
                         dtype=torch.float64)
         diag_val = 1. - beta_t * (self.num_pixel_vals - 1.) / self.num_pixel_vals
         mat.fill_diagonal_(diag_val)
-        return mat
+        return mat.to(self.device)
 
     
     def _get_transition_mat(self, t: int):
@@ -139,7 +141,7 @@ class DiscreteDiffusion:
         
         diag = 1. - mat.sum(1)
         mat += torch.diag(diag, diagonal=0)
-        return mat
+        return mat.to(self.device)
     
 
     def _at(self, a, t, x):
@@ -489,9 +491,9 @@ class DiscreteDiffusion:
 
         # Add noise to data
         noise = torch.rand(x_start.shape + (self.num_pixel_vals,), 
-                           generator=noise_rng)
+                           generator=noise_rng).to(self.device)
         t = torch.randint(0, self.num_timesteps, (x_start.shape[0],),
-                          dtype=torch.int32, generator=time_rng)
+                          dtype=torch.int32, generator=time_rng).to(self.device)
         
         # t starts at zero. so x_0 is the first noisy datapoint, not the datapoint
         # itself.
