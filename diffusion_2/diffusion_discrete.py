@@ -257,7 +257,7 @@ class DiscreteDiffusion:
         """Compute logits of q(x_{t-1} | x_t, x_start) in PyTorch."""
 
         if x_start_logits:
-            assert x_start.shape == x_t.shape[:-1] + (self.num_pixel_vals,), (x_start.shape, x_t.shape)
+            assert x_start.shape == x_t.shape + (self.num_pixel_vals,), (x_start.shape, x_t.shape)
         else:
             assert x_start.shape == x_t.shape, (x_start.shape, x_t.shape)
 
@@ -302,7 +302,14 @@ class DiscreteDiffusion:
             # as ~ sum_{pred_x_start} q(x_{t-1}, x_t |pred_x_start)p(pred_x_start|x_t)
             pred_x_start_logits = model_logits
 
-            t_broadcast = t.unsqueeze(1).expand(-1, *model_logits.shape[1:])
+            # t_broadcast = t.unsqueeze(1).expand(-1, *model_logits.shape[1:])
+
+            t_broadcast = t.unsqueeze(1).unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)
+            t_broadcast = t_broadcast.expand_as(model_logits)
+
+            # t_broadcast = t.unsqueeze(1).expand(-1, *x.shape[1:])
+            # t_broadcast = t.unsqueeze(1).expand(-1, *out.shape[1:])
+
             model_logits = torch.where(t_broadcast == 0,
                                        pred_x_start_logits,
                                        self.q_posterior_logits(pred_x_start_logits, x,
