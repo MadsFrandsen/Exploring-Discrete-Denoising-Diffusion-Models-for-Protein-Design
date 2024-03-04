@@ -1,5 +1,6 @@
 import torch
 import torch.nn.functional as F
+import math
 import utils
 
 
@@ -158,9 +159,6 @@ class DiscreteDiffusion:
         t_broadcast = t.unsqueeze(1).unsqueeze(-1).unsqueeze(-1)
         t_broadcast = t_broadcast.expand_as(x)
 
-        # t_broadcast = t.unsqueeze(1).expand(-1, *x.shape[1:])
-        # t_broadcast = t.unsqueeze(1).expand(-1, *out.shape[1:])
-
         # x.shape = (bs, height, width, channels)
         # t_broadcast_shape = (bs, 1, 1, 1)
         # a.shape = (num_timesteps, num_pixel_vals, num_pixel_vals)
@@ -187,8 +185,6 @@ class DiscreteDiffusion:
         # x.shape = (bs, height, width, channels, num_pixel_vals)
         # a[t]shape = (bs, num_pixel_vals, num_pixel_vals)
         # out.shape = (bs, height, width, channels, num_pixel_vals)
-        # t_indexed = a[t]
-        # return torch.matmul(x, t_indexed.unsqueeze(1))
         return torch.matmul(x, a[t, None, None, Ellipsis])
     
 
@@ -275,7 +271,6 @@ class DiscreteDiffusion:
         # At t=0 we need the logits of q(x_{-1}|x_0, x_start)
         # where x_{-1} == x_start. This should be equal to the log of x_0.
         out = torch.log(fact1 + self.eps) + torch.log(fact2 + self.eps)
-        # t_broadcast = t.unsqueeze(1).expand(-1, *out.shape[1:])
 
         t_broadcast = t.unsqueeze(1).unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)
         t_broadcast = t_broadcast.expand_as(out)
@@ -307,9 +302,6 @@ class DiscreteDiffusion:
 
             t_broadcast = t.unsqueeze(1).unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)
             t_broadcast = t_broadcast.expand_as(model_logits)
-
-            # t_broadcast = t.unsqueeze(1).expand(-1, *x.shape[1:])
-            # t_broadcast = t.unsqueeze(1).expand(-1, *out.shape[1:])
 
             model_logits = torch.where(t_broadcast == 0,
                                        pred_x_start_logits,
@@ -425,11 +417,11 @@ class DiscreteDiffusion:
 
         kl = utils.categorical_kl_logits(logits1=true_logits, logits2=model_logits)
         assert kl.shape == x_start.shape
-        kl = utils.meanflat(kl) / torch.log(2.)
+        kl = utils.meanflat(kl) / math.log(2.)
 
         decoder_nll = -utils.categorical_log_likelihood(x_start, model_logits)
         assert decoder_nll.shape == x_start.shape
-        decoder_nll = utils.meanflat(decoder_nll) / torch.log(2.)
+        decoder_nll = utils.meanflat(decoder_nll) / math.log(2.)
 
         assert kl.shape == decoder_nll.shape == t.shape == (x_start.shape[0],)
         return torch.where(t == 0, decoder_nll, kl), pred_x_start_logits
@@ -467,7 +459,7 @@ class DiscreteDiffusion:
         kl_prior = utils.categorical_kl_probs(
             q_probs, prior_probs)
         assert kl_prior.shape == x_start.shape
-        return utils.meanflat(kl_prior) / torch.log(2.)
+        return utils.meanflat(kl_prior) / math.log(2.)
 
 
     def cross_entropy_start(self, x_start, pred_x_start_logits):
@@ -482,7 +474,7 @@ class DiscreteDiffusion:
         """
         ce = -utils.categorical_log_likelihood(x_start, pred_x_start_logits)
         assert ce.shape == x_start.shape
-        ce = utils.meanflat(ce) / torch.log(2.)
+        ce = utils.meanflat(ce) / math.log(2.)
 
         assert ce.shape == (x_start.shape[0],)
         return ce

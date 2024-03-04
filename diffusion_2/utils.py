@@ -87,7 +87,7 @@ def categorical_log_likelihood(x, logits):
         log likelihoods
     """
     log_probs = F.log_softmax(logits)
-    x_onehot = F.one_hot(x, num_classes=logits.size(-1))
+    x_onehot = F.one_hot(x.to(torch.int64), num_classes=logits.size(-1))
     return torch.sum(log_probs * x_onehot, dim=-1)
 
 
