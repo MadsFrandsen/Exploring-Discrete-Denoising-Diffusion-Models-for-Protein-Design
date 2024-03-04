@@ -183,12 +183,13 @@ class DiscreteDiffusion:
             shape = (bs, ..., num_pixel_vals)
         """
         a = a.to(dtype=self.torch_dtype)
-        t_indexed = a[t]
 
         # x.shape = (bs, height, width, channels, num_pixel_vals)
         # a[t]shape = (bs, num_pixel_vals, num_pixel_vals)
         # out.shape = (bs, height, width, channels, num_pixel_vals)
-        return torch.matmul(x, t_indexed.unsqueeze(1))
+        # t_indexed = a[t]
+        # return torch.matmul(x, t_indexed.unsqueeze(1))
+        return torch.matmul(x, a[t, None, None, Ellipsis])
     
 
     def q_probs(self, x_start, t):
