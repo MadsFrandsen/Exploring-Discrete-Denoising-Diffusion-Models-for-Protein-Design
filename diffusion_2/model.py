@@ -529,14 +529,14 @@ class UNet(Module):
             else:
                 # Get the skip connection from first half of U-Net and concatenate
                 s = h.pop()
-                print("s shape: ",s.shape)
-                print("x shape: ",x.shape)
                 x = torch.cat((x, s), dim=1)
                 #
                 x = m(x, t)
         
         # Final normalization and convolution
         x = self.final(self.act(self.norm(x)))
+
+        print('made it here')
 
         if self.model_output == 'logistic_pars':
             loc, log_scale = torch.chunk(x, 2, dim=1)
