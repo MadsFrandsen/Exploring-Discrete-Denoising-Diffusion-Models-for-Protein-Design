@@ -238,8 +238,7 @@ class DiscreteDiffusion:
         inv_scale = torch.exp(-(log_scale - 2.))
 
         bin_width = 2. / (self.num_pixel_vals - 1.)
-        bin_centers = torch.linspace(start=-1., stop=1., steps=self.num_pixel_vals,
-                                     device=loc.device)
+        bin_centers = torch.linspace(start=-1., end=1., steps=self.num_pixel_vals, device=loc.device)
         
         for _ in range(loc.ndim - 1):
             bin_centers = bin_centers.unsqueeze(0)
@@ -288,7 +287,7 @@ class DiscreteDiffusion:
         assert t.shape == (x.shape[0],)
         model_output = model_fn(x, t)
 
-        if self.model_output == 'logitsl':
+        if self.model_output == 'logits':
             model_logits = model_output
         
         elif self.model_output == 'logistic_pars':

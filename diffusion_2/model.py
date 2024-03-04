@@ -536,7 +536,6 @@ class UNet(Module):
         # Final normalization and convolution
         x = self.final(self.act(self.norm(x)))
 
-        print('made it here')
 
         if self.model_output == 'logistic_pars':
             loc, log_scale = torch.chunk(x, 2, dim=1)
