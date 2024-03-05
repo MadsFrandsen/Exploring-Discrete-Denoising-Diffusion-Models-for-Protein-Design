@@ -159,7 +159,6 @@ class DiscreteDiffusion:
         """
         a = a.to(dtype=self.torch_dtype)
         t_broadcast = t.unsqueeze(1).unsqueeze(-1).unsqueeze(-1)
-        t_broadcast = t_broadcast.expand_as(x)
 
         # x.shape = (bs, height, width, channels)
         # t_broadcast_shape = (bs, 1, 1, 1)
