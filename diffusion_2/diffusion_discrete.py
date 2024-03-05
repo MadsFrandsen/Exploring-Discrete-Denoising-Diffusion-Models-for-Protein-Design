@@ -364,7 +364,7 @@ class DiscreteDiffusion:
                 model_fn=model_fn,
                 x=x,
                 t=t,
-                noise=torch.rand(size=noise_shape, generator=rng)
+                noise=torch.rand(size=noise_shape, generator=rng).to(self.device)
             )
             return x
         
