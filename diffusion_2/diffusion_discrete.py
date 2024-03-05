@@ -359,7 +359,7 @@ class DiscreteDiffusion:
         noise_shape = shape + (self.num_pixel_vals,)
 
         def body_fun(i, x):
-            t = torch.full([shape[0]], self.num_timesteps - 1 - i)
+            t = torch.full([shape[0]], self.num_timesteps - 1 - i).to(self.device)
             x, _ = self.p_sample(
                 model_fn=model_fn,
                 x=x,
@@ -371,13 +371,13 @@ class DiscreteDiffusion:
         if self.transition_mat_type in ['gaussian', 'uniform']:
             # Stationary distribution is a uniform distribution over all pixel values.
             x_init = torch.randint(low=0, high=self.num_pixel_vals,
-                                   size=shape, generator=rng)
+                                   size=shape, generator=rng).to(self.device)
         elif self.transition_mat_type == 'absorbing':
             # Stationary distribution is a kronecker delta distribution
             # with all its mass on the absorbing state.
             # Absorbing state is located at rgb values (128, 128, 128)
             x_init = torch.full(size=shape, fill_value=self.num_pixel_vals//2,
-                                dtype=torch.int32)
+                                dtype=torch.int32).to(self.device)
         else:
             raise ValueError(
                 f"transition_mat_type must be 'gaussian', 'uniform', 'absorbing' "
