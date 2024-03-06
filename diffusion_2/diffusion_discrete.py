@@ -178,7 +178,7 @@ class DiscreteDiffusion:
             (Noisy) data. Should be of one-hot-type representation.
 
         Returns:
-        out: torch.Tensor: Torch tensor. output of dot(x, a[t], axis=[[-1], [1]]).
+        out: torch.Tensor: Torch tensor. output of dot(x, a[t], dim=[[-1], [1]]).
             shape = (bs, ..., num_pixel_vals)
         """
         a = a.to(dtype=self.torch_dtype)
@@ -224,7 +224,7 @@ class DiscreteDiffusion:
         # To avoid numerical issues clip the noise to a minimum value
         noise = torch.clip(noise, min=torch.finfo(noise.dtype).tiny, max=1.)
         gumbel_noise = -torch.log(-torch.log(noise))
-        return torch.argmax(logits + gumbel_noise, axis=-1)
+        return torch.argmax(logits + gumbel_noise, dim=-1)
     
 
     def _get_logits_from_logistic_pars(self, loc, log_scale):
@@ -274,7 +274,6 @@ class DiscreteDiffusion:
         out = torch.log(fact1 + self.eps) + torch.log(fact2 + self.eps)
 
         t_broadcast = t.unsqueeze(1).unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)
-        t_broadcast = t_broadcast.expand_as(out)
 
         return torch.where(t_broadcast == 0, tzero_logits, out)
     
@@ -299,10 +298,8 @@ class DiscreteDiffusion:
             # as ~ sum_{pred_x_start} q(x_{t-1}, x_t |pred_x_start)p(pred_x_start|x_t)
             pred_x_start_logits = model_logits
 
-            # t_broadcast = t.unsqueeze(1).expand(-1, *model_logits.shape[1:])
 
             t_broadcast = t.unsqueeze(1).unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)
-            t_broadcast = t_broadcast.expand_as(model_logits)
 
             model_logits = torch.where(t_broadcast == 0,
                                        pred_x_start_logits,
@@ -551,7 +548,7 @@ class DiscreteDiffusion:
         assert vbterms_bt.shape == (batch_size, self.num_timesteps)
 
         prior_b = self.prior_bpd(x_start=x_start)
-        total_b = vbterms_tb.sum(axis=0) + prior_b
+        total_b = vbterms_tb.sum(dim=0) + prior_b
         assert prior_b.shape == total_b.shape == (batch_size,)
 
         return {
