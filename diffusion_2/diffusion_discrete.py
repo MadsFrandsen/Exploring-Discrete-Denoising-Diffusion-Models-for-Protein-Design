@@ -2,6 +2,7 @@ import torch
 import torch.nn.functional as F
 import math
 import utils
+import numpy as onp
 
 
 
@@ -9,16 +10,16 @@ import utils
 def generate_betas(start: float, stop: float, num_steps: int, type: str):
     """Function to generate betas."""
     if type == 'linear':
-        return torch.linspace(start, stop, num_steps)
+        return torch.tensor(onp.linspace(start, stop, num_steps))
     elif type == 'cosine':
         steps = (
-            torch.arange(num_steps + 1, dtype=torch.float64) / num_steps
-        )
-        alpha_bar = torch.cos((steps + 0.008) / 1.008 * torch.pi / 2)
-        betas = torch.minimum(1 - alpha_bar[1:] / alpha_bar[:-1], torch.tensor(0.999))
-        return betas
+        onp.arange(num_steps + 1, dtype=onp.float64) /
+        num_steps)
+        alpha_bar = onp.cos((steps + 0.008) / 1.008 * onp.pi / 2)
+        betas = onp.minimum(1 - alpha_bar[1:] / alpha_bar[:-1], 0.999)
+        return torch.tensor(betas)
     elif type == 'jsd':
-        return 1. / torch.linspace(num_steps, 1., num_steps)
+        return torch.tensor(1. / onp.linspace(num_steps, 1., num_steps))
     else:
         raise NotImplementedError(type)
     
