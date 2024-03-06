@@ -240,7 +240,7 @@ class DiscreteDiffusion:
         
         for _ in range(loc.ndim - 1):
             bin_centers = bin_centers.unsqueeze(0)
-        
+
         bin_centers = bin_centers - loc
         log_cdf_min = F.logsigmoid(
             inv_scale * (bin_centers - 0.5 * bin_width))
