@@ -71,14 +71,14 @@ class DiscreteDiffusion:
                                              self.num_pixel_vals)
         
         # Construct transition matrices for q(x_t|x_start)
-        q_mat_t = self.q_onestep_mats[0]
+        q_mat_t = self.q_onestep_mats[0].numpy()
         q_mats = [q_mat_t]
         for t in range(1, self.num_timesteps):
             # Q_{1...t} = Q_{1 ... t-1} Q_t = Q_1 Q_2 ... Q_t
-            q_mat_t = torch.tensordot(q_mat_t, self.q_onestep_mats[t],
-                                      dims=[[1], [0]])
+            q_mat_t = onp.tensordot(q_mat_t, self.q_onestep_mats[t],
+                                      axes=[[1], [0]])
             q_mats.append(q_mat_t)
-        self.q_mats = torch.stack(q_mats, dim=0)
+        self.q_mats = torch.tensor(onp.stack(q_mats, axis=0))
         assert self.q_mats.shape == (self.num_timesteps, self.num_pixel_vals,
                                      self.num_pixel_vals), self.q_mats.shape
         

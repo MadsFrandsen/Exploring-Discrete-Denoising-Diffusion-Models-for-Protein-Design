@@ -1,5 +1,6 @@
 import torch
 import torch.nn.functional as F
+import sys
 
 
 def normalize_data(x, mode=None):
@@ -86,7 +87,7 @@ def categorical_log_likelihood(x, logits):
     Returns:
         log likelihoods
     """
-    log_probs = F.log_softmax(logits)
+    log_probs = F.log_softmax(logits, dim=-1)
     x_onehot = F.one_hot(x.to(torch.int64), num_classes=logits.size(-1))
     return torch.sum(log_probs * x_onehot, dim=-1)
 
