@@ -356,25 +356,25 @@ class DiscreteDiffusion:
         noise_shape = shape + (self.num_pixel_vals,)
 
         def body_fun(i, x):
-            t = torch.full([shape[0]], self.num_timesteps - 1 - i).to(self.device)
+            t = torch.full([shape[0]], self.num_timesteps - 1 - i, device=self.device)
             x, _ = self.p_sample(
                 model_fn=model_fn,
                 x=x,
                 t=t,
-                noise=torch.rand(size=noise_shape, generator=rng).to(self.device)
+                noise=torch.rand(size=noise_shape, generator=rng, device=self.device)
             )
             return x
         
         if self.transition_mat_type in ['gaussian', 'uniform']:
             # Stationary distribution is a uniform distribution over all pixel values.
             x_init = torch.randint(low=0, high=self.num_pixel_vals,
-                                   size=shape, generator=rng).to(self.device)
+                                   size=shape, generator=rng, device=self.device)
         elif self.transition_mat_type == 'absorbing':
             # Stationary distribution is a kronecker delta distribution
             # with all its mass on the absorbing state.
             # Absorbing state is located at rgb values (128, 128, 128)
             x_init = torch.full(size=shape, fill_value=self.num_pixel_vals//2,
-                                dtype=torch.int32).to(self.device)
+                                dtype=torch.int32, device=self.device)
         else:
             raise ValueError(
                 f"transition_mat_type must be 'gaussian', 'uniform', 'absorbing' "
@@ -488,9 +488,9 @@ class DiscreteDiffusion:
 
         # Add noise to data
         noise = torch.rand(x_start.shape + (self.num_pixel_vals,), 
-                           generator=noise_rng).to(self.device)
+                           generator=noise_rng, device=self.device)
         t = torch.randint(0, self.num_timesteps, (x_start.shape[0],),
-                          dtype=torch.int32, generator=time_rng).to(self.device)
+                          dtype=torch.int32, generator=time_rng, device=self.device)
         
         # t starts at zero. so x_0 is the first noisy datapoint, not the datapoint
         # itself.
