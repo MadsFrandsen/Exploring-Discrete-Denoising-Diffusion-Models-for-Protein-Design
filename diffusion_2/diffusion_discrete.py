@@ -350,7 +350,7 @@ class DiscreteDiffusion:
                       num_timesteps=None, return_x_init=False):
         """Ancestral sampling."""
         torch.manual_seed(rng_seed)
-        rng = torch.Generator()
+        rng = torch.Generator(device=self.device)
         rng.manual_seed(rng_seed)
 
         noise_shape = shape + (self.num_pixel_vals,)
@@ -483,8 +483,8 @@ class DiscreteDiffusion:
         """Training loss calculation."""
 
         torch.manual_seed(rng)
-        noise_rng = torch.Generator().manual_seed(rng)
-        time_rng = torch.Generator().manual_seed(rng + 1)
+        noise_rng = torch.Generator(device=self.device).manual_seed(rng)
+        time_rng = torch.Generator(device=self.device).manual_seed(rng + 1)
 
         # Add noise to data
         noise = torch.rand(x_start.shape + (self.num_pixel_vals,), 
@@ -534,11 +534,11 @@ class DiscreteDiffusion:
 
         for t in range(self.num_timesteps):
             # Set up RNG for this iteration. Each timestep gets a unique RNG state.
-            rng = torch.Generator()
+            rng = torch.Generator(device=self.device)
             rng.manual_seed(rng_seed + t)
             
             # Calculate VB term at the current timestep
-            noise = torch.rand(x_start.shape + (self.num_pixel_vals,), generator=rng)
+            noise = torch.rand(x_start.shape + (self.num_pixel_vals,), generator=rng, device=self.device)
             vb, _ = self.vb_terms_bpd(
                 model_fn=model_fn, x_start=x_start, t=torch.full((batch_size,), t, dtype=torch.int32),
                 x_t=self.q_sample(x_start=x_start, t=torch.full((batch_size,), t, dtype=torch.int32), noise=noise)
