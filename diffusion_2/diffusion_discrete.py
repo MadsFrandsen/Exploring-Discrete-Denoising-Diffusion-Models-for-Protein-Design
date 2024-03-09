@@ -333,7 +333,7 @@ class DiscreteDiffusion:
 
         # No noise when t == 0
         # NOTE: for t=0 this just "samples" from the argmax
-        #   as opposed to "sampling" from the mean in the gaussian case.
+        # as opposed to "sampling" from the mean in the gaussian case.
         nonzero_mask = (t != 0).type(x.dtype).view(x.shape[0], *([1] * (len(x.shape))))
         # For numerical precision clip the noise to a minimum value
         noise = torch.clip(noise, min=torch.finfo(noise.dtype).tiny, max=1.)
