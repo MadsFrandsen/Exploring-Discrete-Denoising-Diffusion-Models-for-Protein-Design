@@ -104,10 +104,10 @@ class DiscreteDiffusion:
         beta_t = self.betas[t]
         mat = torch.full(size=(self.num_pixel_vals, self.num_pixel_vals),
                         fill_value=beta_t / float(self.num_pixel_vals),
-                        dtype=torch.float64)
+                        dtype=torch.float64, device=self.device)
         diag_val = 1. - beta_t * (self.num_pixel_vals - 1.) / self.num_pixel_vals
         mat.fill_diagonal_(diag_val)
-        return mat.to(self.device)
+        return mat
 
     
     def _get_transition_mat(self, t: int):
@@ -131,10 +131,10 @@ class DiscreteDiffusion:
         beta_t = self.betas[t]
 
         mat = torch.zeros((self.num_pixel_vals, self.num_pixel_vals),
-                          dtype=torch.float64)
+                          dtype=torch.float64, device=self.device)
         off_diag = torch.full(size=(self.num_pixel_vals-1,),
                               fill_value=beta_t / float(self.num_pixel_vals),
-                              dtype=torch.float64)
+                              dtype=torch.float64, device=self.device)
         for k in range(1, self.transition_bands + 1):
             mat += torch.diag(off_diag, diagonal=k)
             mat += torch.diag(off_diag, diagonal=-k)
@@ -142,7 +142,7 @@ class DiscreteDiffusion:
         
         diag = 1. - mat.sum(1)
         mat += torch.diag(diag, diagonal=0)
-        return mat.to(self.device)
+        return mat
     
 
     def _at(self, a, t, x):
@@ -540,8 +540,8 @@ class DiscreteDiffusion:
             # Calculate VB term at the current timestep
             noise = torch.rand(x_start.shape + (self.num_pixel_vals,), generator=rng, device=self.device)
             vb, _ = self.vb_terms_bpd(
-                model_fn=model_fn, x_start=x_start, t=torch.full((batch_size,), t, dtype=torch.int32),
-                x_t=self.q_sample(x_start=x_start, t=torch.full((batch_size,), t, dtype=torch.int32), noise=noise)
+                model_fn=model_fn, x_start=x_start, t=torch.full((batch_size,), t, dtype=torch.int32, device=self.device),
+                x_t=self.q_sample(x_start=x_start, t=torch.full((batch_size,), t, dtype=torch.int32, device=self.device), noise=noise)
             )
             vbterms_tb[t] = vb
 
