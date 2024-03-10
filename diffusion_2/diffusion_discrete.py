@@ -145,7 +145,7 @@ class DiscreteDiffusion:
         mat += torch.diag(diag, diagonal=0)
         return mat
     
-    def _get_gaussian_trans_mat(self, t: int):
+    def _get_gaussian_transition_mat(self, t: int):
         transition_bands = self.transition_bands if self.transition_bands else self.num_pixel_vals - 1
 
         beta_t = self.betas[t]
@@ -171,6 +171,18 @@ class DiscreteDiffusion:
         
         diag = 1. - mat.sum(dim=1)
         mat += torch.diag(diag, diagonal=0)
+        return mat
+    
+    def _get_absorbing_transition_mat(self, t):
+        beta_t = self.betas[t]
+
+        diag = torch.full(shape=(self.num_pixel_vals,), fill_value=1. - beta_t,
+                          dtype = torch.float64)
+        mat = torch.diag(diag, diagonal=0)
+        # Add beta_t to the num_pixel_vals/2-th column for the absorbing state.
+        mat[:, self.num_pixel_vals//2] += beta_t
+
+        
         return mat
     
 
