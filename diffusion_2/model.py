@@ -411,6 +411,8 @@ class UNet(Module):
         x_onehot = F.one_hot(x, num_classes=self.num_pixel_vals)
         # Convert to float and scale image to [-1, 1]
         x = utils.normalize_data(x.float())
+        # Permute (B, C, H, W)
+        x = x.permute(0, 3, 1, 2)
 
         # Get time-step embeddings
         t = self.time_emb(t)

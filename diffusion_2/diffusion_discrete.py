@@ -2,6 +2,7 @@ import torch
 import torch.nn.functional as F
 import math
 import utils
+import scipy.special
 import numpy as onp
 
 
@@ -140,7 +141,35 @@ class DiscreteDiffusion:
             mat += torch.diag(off_diag, diagonal=-k)
             off_diag = off_diag[:-1]
         
-        diag = 1. - mat.sum(1)
+        diag = 1. - mat.sum(dim=1)
+        mat += torch.diag(diag, diagonal=0)
+        return mat
+    
+    def _get_gaussian_trans_mat(self, t: int):
+        transition_bands = self.transition_bands if self.transition_bands else self.num_pixel_vals - 1
+
+        beta_t = self.betas[t]
+
+        mat = torch.zeros((self.num_pixel_vals, self.num_pixel_vals), 
+                          dtype=torch.float64)
+        
+        values = torch.linspace(start=0., end=255., steps=self.num_pixel_vals,
+                                dtype=torch.float64)
+        values = values * 2. / (self.num_pixel_vals - 1)
+        values = values[:transition_bands+1]
+        values = -values * values / beta_t
+
+        values = torch.cat([values[:0:-1], values], dim=0)
+        values = F.softmax(values, dim=0)
+        values = values[transition_bands:]
+        for k in range(1, transition_bands + 1):
+            off_diag = torch.full(size=(self.num_pixel_vals - k,),
+                                  fill_value=values[k],
+                                  dtype=torch.float64)
+            mat += torch.diag(off_diag, diagonal=k)
+            mat += torch.diag(off_diag, diagonal=-k)
+        
+        diag = 1. - mat.sum(dim=1)
         mat += torch.diag(diag, diagonal=0)
         return mat
     
