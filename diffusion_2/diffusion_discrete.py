@@ -4,6 +4,7 @@ import math
 import utils
 import scipy.special
 import numpy as onp
+import sys
 
 
 
@@ -160,13 +161,15 @@ class DiscreteDiffusion:
         mat = torch.zeros((self.num_pixel_vals, self.num_pixel_vals), 
                           dtype=torch.float64)
         
+        # Make the values correspond to a similar type of gaussian as in the
+        # gaussian diffusion case for continuous state spaces.
         values = torch.linspace(start=0., end=255., steps=self.num_pixel_vals,
                                 dtype=torch.float64)
-        values = values * 2. / (self.num_pixel_vals - 1)
+        values = values * 2. / (self.num_pixel_vals - 1.)
         values = values[:transition_bands+1]
         values = -values * values / beta_t
 
-        values = torch.cat([values[:0:-1], values], dim=0)
+        values = torch.cat([values.flip(dims=[0]), values], dim=0)
         values = F.softmax(values, dim=0)
         values = values[transition_bands:]
         for k in range(1, transition_bands + 1):
@@ -176,8 +179,13 @@ class DiscreteDiffusion:
             mat += torch.diag(off_diag, diagonal=k)
             mat += torch.diag(off_diag, diagonal=-k)
         
+        # Add diagonal values such that rows and columns sum to one.
+        # Technically only the ROWS need to sum to one
+        # NOTE: this normalization leads to a doubly stochastic matrix,
+        # which is necessary if we want to have a uniform stationary distribution.
         diag = 1. - mat.sum(dim=1)
         mat += torch.diag(diag, diagonal=0)
+        
         return mat
     
     def _get_absorbing_transition_mat(self, t):
