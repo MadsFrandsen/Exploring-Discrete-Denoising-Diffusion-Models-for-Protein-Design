@@ -403,12 +403,12 @@ class DiscreteDiffusion:
         return sample, F.softmax(pred_x_start_logits, dim=-1)
 
 
-    def p_sample_loop(self, model_fn, *, shape, rng_seed,
+    def p_sample_loop(self, model_fn, *, shape, rng,
                       num_timesteps=None, return_x_init=False):
         """Ancestral sampling."""
-        torch.manual_seed(rng_seed)
-        rng = torch.Generator(device=self.device)
-        rng.manual_seed(rng_seed)
+        torch.manual_seed(rng)
+        rng_gen = torch.Generator(device=self.device)
+        rng_gen.manual_seed(rng)
 
         noise_shape = shape + (self.num_pixel_vals,)
 
@@ -418,14 +418,14 @@ class DiscreteDiffusion:
                 model_fn=model_fn,
                 x=x,
                 t=t,
-                noise=torch.rand(size=noise_shape, generator=rng, device=self.device)
+                noise=torch.rand(size=noise_shape, generator=rng_gen, device=self.device)
             )
             return x
         
         if self.transition_mat_type in ['gaussian', 'uniform']:
             # Stationary distribution is a uniform distribution over all pixel values.
             x_init = torch.randint(low=0, high=self.num_pixel_vals,
-                                   size=shape, generator=rng, device=self.device)
+                                   size=shape, generator=rng_gen, device=self.device)
         elif self.transition_mat_type == 'absorbing':
             # Stationary distribution is a kronecker delta distribution
             # with all its mass on the absorbing state.
@@ -580,22 +580,21 @@ class DiscreteDiffusion:
         return losses
 
 
-    def calc_bpd_loop(self, model_fn, *, x_start, rng_seed):
+    def calc_bpd_loop(self, model_fn, *, x_start, rng):
         """Calculate variational bound (loop over all timesteps and sum)."""
-        torch.manual_seed(rng_seed)
+        torch.manual_seed(rng)
         batch_size = x_start.shape[0]
 
 
         # Initialize a tensor to store variational bounds for each timestep
-        vbterms_tb = torch.empty((self.num_timesteps, batch_size), dtype=torch.float32)
-
+        vbterms_tb = torch.empty((self.num_timesteps, batch_size), dtype=torch.float32, device=self.device)
         for t in range(self.num_timesteps):
             # Set up RNG for this iteration. Each timestep gets a unique RNG state.
-            rng = torch.Generator(device=self.device)
-            rng.manual_seed(rng_seed + t)
+            rng_gen = torch.Generator(device=self.device)
+            rng_gen.manual_seed(rng + t)
             
             # Calculate VB term at the current timestep
-            noise = torch.rand(x_start.shape + (self.num_pixel_vals,), generator=rng, device=self.device)
+            noise = torch.rand(x_start.shape + (self.num_pixel_vals,), generator=rng_gen, device=self.device)
             vb, _ = self.vb_terms_bpd(
                 model_fn=model_fn, x_start=x_start, t=torch.full((batch_size,), t, dtype=torch.int32, device=self.device),
                 x_t=self.q_sample(x_start=x_start, t=torch.full((batch_size,), t, dtype=torch.int32, device=self.device), noise=noise)
@@ -608,7 +607,6 @@ class DiscreteDiffusion:
         prior_b = self.prior_bpd(x_start=x_start)
         total_b = vbterms_tb.sum(dim=0) + prior_b
         assert prior_b.shape == total_b.shape == (batch_size,)
-
         return {
             'total': total_b,
             'vbterms': vbterms_bt,
