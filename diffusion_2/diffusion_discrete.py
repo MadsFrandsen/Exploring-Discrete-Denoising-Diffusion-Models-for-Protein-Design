@@ -61,11 +61,18 @@ class DiscreteDiffusion:
         if self.transition_mat_type == 'uniform':
             q_one_step_mats = [self._get_transition_mat(t)
                                for t in range(0, self.num_timesteps)]
+        elif self.transition_mat_type == 'gaussian':
+            q_one_step_mats = [self._get_gaussian_transition_mat(t)
+                               for t in range(0, self.num_timesteps)]
+        elif self.transition_mat_type == 'absorbing':
+            q_one_step_mats = [self._get_absorbing_transition_mat(t)
+                               for t in range(0, self.num_timesteps)]
         else:
             raise ValueError(
                 f"transition_mat_type must be 'uniform'"
                 f", but is {self.transition_mat_type}"
             )
+        
         self.q_onestep_mats = torch.stack(q_one_step_mats, dim=0)
         assert self.q_onestep_mats.shape == (self.num_timesteps,
                                              self.num_pixel_vals,

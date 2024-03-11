@@ -1,6 +1,7 @@
 data/
 venv/
 *.DS_Store
+old_functions.py
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
