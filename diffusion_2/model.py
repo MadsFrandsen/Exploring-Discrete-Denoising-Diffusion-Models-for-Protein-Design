@@ -448,6 +448,11 @@ class UNet(Module):
         if self.model_output == 'logistic_pars':
             loc, log_scale = torch.chunk(x, 2, dim=1)
             loc = torch.tanh(loc)
+
+            # reshape back to (B, H, W, C) to fit framework
+            loc = loc.permute(0, 2, 3, 1)
+            log_scale = log_scale.permute(0, 2, 3, 1)
+
             return loc, log_scale
         
         elif self.model_output == 'logits':

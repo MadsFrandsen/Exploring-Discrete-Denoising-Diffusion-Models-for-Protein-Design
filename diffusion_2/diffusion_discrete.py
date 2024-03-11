@@ -285,7 +285,7 @@ class DiscreteDiffusion:
         inv_scale = torch.exp(-(log_scale - 2.))
 
         bin_width = 2. / (self.num_pixel_vals - 1.)
-        bin_centers = torch.linspace(start=-1., end=1., steps=self.num_pixel_vals, device=loc.device)
+        bin_centers = torch.linspace(start=-1., end=1., steps=self.num_pixel_vals, device=self.device)
         
         for _ in range(loc.ndim - 1):
             bin_centers = bin_centers.unsqueeze(0)
