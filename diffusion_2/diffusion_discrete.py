@@ -593,7 +593,7 @@ class DiscreteDiffusion:
             )
             vbterms_tb[t] = vb
 
-        vbterms_bt = vbterms_tb.transpose(0, 1)
+        vbterms_bt = vbterms_tb.T
         assert vbterms_bt.shape == (batch_size, self.num_timesteps)
 
         prior_b = self.prior_bpd(x_start=x_start)
