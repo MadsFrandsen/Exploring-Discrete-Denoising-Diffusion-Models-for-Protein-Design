@@ -80,14 +80,14 @@ class DiscreteDiffusion:
                                              self.num_pixel_vals)
         
         # Construct transition matrices for q(x_t|x_start)
-        q_mat_t = self.q_onestep_mats[0].numpy()
+        q_mat_t = self.q_onestep_mats[0].detach().cpu().numpy()
         q_mats = [q_mat_t]
         for t in range(1, self.num_timesteps):
             # Q_{1...t} = Q_{1 ... t-1} Q_t = Q_1 Q_2 ... Q_t
-            q_mat_t = onp.tensordot(q_mat_t, self.q_onestep_mats[t],
+            q_mat_t = onp.tensordot(q_mat_t, self.q_onestep_mats[t].detach().cpu().numpy(),
                                       axes=[[1], [0]])
             q_mats.append(q_mat_t)
-        self.q_mats = torch.tensor(onp.stack(q_mats, axis=0))
+        self.q_mats = torch.tensor(onp.stack(q_mats, axis=0), device=self.device)
         assert self.q_mats.shape == (self.num_timesteps, self.num_pixel_vals,
                                      self.num_pixel_vals), self.q_mats.shape
         
@@ -159,12 +159,12 @@ class DiscreteDiffusion:
         beta_t = self.betas[t]
 
         mat = torch.zeros((self.num_pixel_vals, self.num_pixel_vals), 
-                          dtype=torch.float64)
+                          dtype=torch.float64, device=self.device)
         
         # Make the values correspond to a similar type of gaussian as in the
         # gaussian diffusion case for continuous state spaces.
         values = torch.linspace(start=0., end=255., steps=self.num_pixel_vals,
-                                dtype=torch.float64)
+                                dtype=torch.float64, device=self.device)
         values = values * 2. / (self.num_pixel_vals - 1.)
         values = values[:transition_bands+1]
         values = -values * values / beta_t
@@ -175,7 +175,8 @@ class DiscreteDiffusion:
         for k in range(1, transition_bands + 1):
             off_diag = torch.full(size=(self.num_pixel_vals - k,),
                                   fill_value=values[k],
-                                  dtype=torch.float64)
+                                  dtype=torch.float64,
+                                  device=self.device)
             mat += torch.diag(off_diag, diagonal=k)
             mat += torch.diag(off_diag, diagonal=-k)
         
@@ -185,7 +186,7 @@ class DiscreteDiffusion:
         # which is necessary if we want to have a uniform stationary distribution.
         diag = 1. - mat.sum(dim=1)
         mat += torch.diag(diag, diagonal=0)
-        
+
         return mat
     
     def _get_absorbing_transition_mat(self, t):
