@@ -407,11 +407,6 @@ class DiscreteDiffusion:
                       num_timesteps=None, return_x_init=False):
         """Ancestral sampling."""
 
-        # ---------------------- rng input to manage generators ---------------#
-        # torch.manual_seed(rng)
-        # rng_gen = torch.Generator(device=self.device)
-        # rng_gen.manual_seed(rng)
-
         noise_shape = shape + (self.num_pixel_vals,)
 
         def body_fun(i, x):
@@ -541,11 +536,6 @@ class DiscreteDiffusion:
     def training_losses(self, model_fn, *, x_start):
         """Training loss calculation."""
 
-        # ---------------------- rng input to manage generators ---------------#
-        # torch.manual_seed(rng)
-        # noise_rng = torch.Generator(device=self.device).manual_seed(rng)
-        # time_rng = torch.Generator(device=self.device).manual_seed(rng + 1)
-
         # Add noise to data
         noise = torch.rand(x_start.shape + (self.num_pixel_vals,), 
                           device=self.device)
@@ -586,18 +576,11 @@ class DiscreteDiffusion:
     def calc_bpd_loop(self, model_fn, *, x_start):
         """Calculate variational bound (loop over all timesteps and sum)."""
         
-        # ---------------------- rng input to manage generators ---------------#
-        # torch.manual_seed(rng)
         batch_size = x_start.shape[0]
-
 
         # Initialize a tensor to store variational bounds for each timestep
         vbterms_tb = torch.empty((self.num_timesteps, batch_size), dtype=torch.float32, device=self.device)
         for t in range(self.num_timesteps):
-            # Set up RNG for this iteration. Each timestep gets a unique RNG state.
-            # rng_gen = torch.Generator(device=self.device)
-            # rng_gen.manual_seed(rng + t)
-            
             # Calculate VB term at the current timestep
             noise = torch.rand(x_start.shape + (self.num_pixel_vals,), device=self.device)
             vb, _ = self.vb_terms_bpd(
