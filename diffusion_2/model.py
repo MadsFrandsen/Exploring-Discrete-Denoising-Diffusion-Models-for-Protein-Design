@@ -411,6 +411,9 @@ class UNet(Module):
         x_onehot = F.one_hot(x, num_classes=self.num_pixel_vals)
         # Convert to float and scale image to [-1, 1]
         x = utils.normalize_data(x.float())
+
+        x_start = x
+
         # Permute (B, C, H, W)
         x = x.permute(0, 3, 1, 2)
 
@@ -444,19 +447,18 @@ class UNet(Module):
         # Final normalization and convolution
         x = self.final(self.act(self.norm(x)))
 
+        # reshape back to (B, H, W, C) to fit framework.
+        x = x.permute(0, 2, 3, 1)
 
         if self.model_output == 'logistic_pars':
-            loc, log_scale = torch.chunk(x, 2, dim=1)
-            loc = torch.tanh(loc)
-
-            # reshape back to (B, H, W, C) to fit framework
-            loc = loc.permute(0, 2, 3, 1)
-            log_scale = log_scale.permute(0, 2, 3, 1)
+            loc, log_scale = torch.chunk(x, 2, dim=-1)
+            # ensure loc is between [-1, 1], just like normalized data.
+            loc = torch.tanh(loc + x_start)
 
             return loc, log_scale
         
         elif self.model_output == 'logits':
-            x = x.reshape(x.shape[0], x.shape[2], x.shape[3], self.image_channels, self.num_pixel_vals)
+            x = x.reshape(x.shape[0], x.shape[1], x.shape[2], self.image_channels, self.num_pixel_vals)
             return x_onehot + x
 
         else:
