@@ -1,6 +1,7 @@
 data/
 venv/
-diffusion_1/
+trained_models/
+alignments/
 *.DS_Store
 old_functions.py
 
