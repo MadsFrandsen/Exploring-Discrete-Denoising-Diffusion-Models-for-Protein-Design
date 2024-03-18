@@ -5,6 +5,7 @@ import json
 import numpy as np
 import torch
 from torch.utils.data import Dataset
+from sklearn.model_selection import train_test_split
 
 path = '/Users/madsfrandsen/Documents/BSc_project/protein_generation/alignments/BLAT_ECOLX_1_b0.5.a2m'
 
@@ -33,9 +34,15 @@ def parse_fasta(path):
     return np.array(sequences)
 
 
+data = parse_fasta(path=path)
+
+train_data, test_data = train_test_split(data, test_size=0.20, random_state=42)
+
+print(train_data.shape)
+print(test_data.shape)
 
 class BlAT_ECOLX_1(Dataset):
-    def __init__(self, path):
+    def __init__(self, train=True):
         self.data = parse_fasta(path=path)
 
     def __len__(self):
