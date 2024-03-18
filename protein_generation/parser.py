@@ -6,6 +6,7 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 from sklearn.model_selection import train_test_split
+from constants import ALL_AAS, AMB_AAS, CAN_AAS
 
 path = '/Users/madsfrandsen/Documents/BSc_project/protein_generation/alignments/BLAT_ECOLX_1_b0.5.a2m'
 
@@ -15,7 +16,7 @@ def parse_fasta(path):
     with open(path, 'r') as file:
         sequence = ''
         for line in file:
-            line = line.strip()
+            line = line.rstrip()
             
             # If line is a new sequence we append the previous sequence,
             # and reset the sequence to the empty string.
@@ -38,8 +39,6 @@ data = parse_fasta(path=path)
 
 train_data, test_data = train_test_split(data, test_size=0.20, random_state=42)
 
-print(train_data.shape)
-print(test_data.shape)
 
 class BlAT_ECOLX_1(Dataset):
     def __init__(self, train=True):
@@ -51,4 +50,18 @@ class BlAT_ECOLX_1(Dataset):
     def __getitem__(self, idx):
         return self.data[idx]
 
+
+for seq in data:
+    if any(aa in AMB_AAS for aa in seq):
+        print('Found AA')
+
+
+for seq in data:
+    for aa in seq:
+        if aa == 'Z':
+            print(seq)
+
+
+for seq in data:
+    print(seq)
 
