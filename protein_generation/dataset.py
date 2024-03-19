@@ -11,6 +11,8 @@ from utils import Tokenizer
 
 # path to dataset
 # path = '/Users/madsfrandsen/Documents/BSc_project/protein_generation/alignments/BLAT_ECOLX_1_b0.5.a2m'
+
+# path used to train model on colab
 path = '/content/drive/MyDrive/BLAT_ECOLX_1_b0.5.a2m'
 
 
