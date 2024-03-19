@@ -41,11 +41,23 @@ def parse_fasta(path):
 
 data, names = parse_fasta(path=path)
 
-train_data, train_names, test_data, test_names = train_test_split(
+train_data, test_data, train_names, test_names = train_test_split(
     data, names, test_size=0.20, random_state=42)
 
 
-class BlAT_ECOLX_1(Dataset):
+def sample_transition_matrix(x_0, Q_bar):
+    """
+    Sample a markov transition according to next_step = x_0 * Q^time,
+    where Q_bar = Q^t or cumprod of scheduled transition matrices
+    returns sample and probabilities
+    """
+    p_next_step = torch.mm(x_0, Q_bar)
+    next_step = torch.multinomial(p_next_step, num_samples=1)
+    return next_step.squeeze(), p_next_step # sample and probabilities
+
+
+
+class ProteinSequenceDataset(Dataset):
     def __init__(self, train=True):
         self.data = train_data if train else test_data
         self.names = train_names if train else test_names
@@ -58,6 +70,37 @@ class BlAT_ECOLX_1(Dataset):
         name = self.names[idx]
         return data, name
 
+
+class Collater(object):
+    def __init__(self, tokenizer=Tokenizer(), num_steps=500, Q=None, Q_bar=None):
+        self.tokenizer=tokenizer
+        self.num_steps = num_steps
+        self.K = tokenizer.K
+        self.Q = Q
+        self.Q_bar = Q_bar
+    
+    def __call__(self, sequences):
+        tokenized = [torch.tensor(self.tokenizer.tokenize(s)) for s in sequences]
+        one_hot = torch.stack([self.tokenizer.one_hot(seq) for seq in tokenized])
+
+        src = []
+        timesteps = []
+        q_x = []
+
+        for i, t in enumerate(tokenized):
+            x = one_hot[i]
+            t = np.random.randint(1, self.num_steps)
+            timesteps.append(t)
+
+            x_t, q_x_t = sample_transition_matrix(x, self.Q_bar[t])
+            src.append(x_t)
+            q_x.append(q_x_t)
+        
+        src = torch.stack(src).to(torch.long)
+        q_x = torch.stack(q_x).to(torch.long)
+        timesteps = torch.tensor(timesteps)
+
+        return src, one_hot, timesteps, tokenized, q_x
 
 
 

@@ -25,6 +25,9 @@ class D3PMLVBLoss(KLDivLoss):
             - timestep (B)
             - Q (K, K) transition matrix
             - Q_bar (K, K) transition matrix accounting for time
+        
+        Returns:
+            - lvb: lower var bound loss as defined in Structured Denoising Diffusion, Austin et. al
     """
     def __init__(self, tmax=500, reduction='batchmean', log_target=False, tokenizer=Tokenizer()):
         self.tmax = tmax
@@ -52,24 +55,27 @@ class D3PMLVBLoss(KLDivLoss):
                 x_t = src_onehot[i]
                 x_0 = tgt_onehot[i]
 
-                A = torch.mm(x_t, torch.t(Q[timestep[i]]))
-                B = torch.mm(x_0, Q_bar[timestep[i] - 1])
-                Q_expand = Q_bar[timestep[i] - 1].unsqueeze(0).expand(A.shape[0], self.K, self.K)
+                # Calculate p_theta_marg, simplified for loops
+                A = torch.mm(x_t, torch.t(Q[timestep[i]])) # [P x K]
+                B = torch.mm(x_0, Q_bar[timestep[i] - 1]) # P x K
+                Q_expand = Q_bar[timestep[i] - 1].unsqueeze(0).expand(A.shape[0], self.K, self.K) # [ P x K x K]
                 B_pred = torch.mul(pred.unsqueeze(2), Q_expand)
 
                 q_t = torch.mul(A.unsqueeze(1), B_pred)
-                p_theta_marg = torch.bmm(torch.transpose(q_t, 1,2), pred.unsqueeze(2)).squeeze()
+                p_theta_marg = torch.bmm(torch.transpose(q_t, 1,2), pred.unsqueeze(2)).squeeze() # mul and sum over model logits
 
                 num = torch.mul(A, B)
                 denom = torch.bmm(torch.mm(x_0, Q_bar[timestep[i]]).unsqueeze(1), x_t.unsqueeze(2))
                 q_t_minus1 = num / denom.squeeze().unsqueeze(1)
 
-                p_theta_marg = p_theta_marg / p_theta_marg.sum(dim=1, keepdim=True)
+                p_theta_marg = p_theta_marg / p_theta_marg.sum(dim=1, keepdim=True) # re-normalize probs per residue
                 p_theta_marg = p_theta_marg.to(tgt.device)
-                kl_loss_i = super().forward(p_theta_marg.log(), q_t_minus1)
+                kl_loss_i = super().forward(p_theta_marg.log(), q_t_minus1) # KLDivLoss expects input in log-space
                 losses.append(kl_loss_i)
-        losses = torch.stack(losses)
-        lvb = ((losses.sum() / tgt.shape[0]))
+                
+
+        losses = torch.stack(losses) # loss per sequence in batch
+        lvb = ((losses.sum() / tgt.shape[0])) # loss per batch, norm by batchsize
         return lvb
 
 
