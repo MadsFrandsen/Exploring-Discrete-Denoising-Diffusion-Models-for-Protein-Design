@@ -31,9 +31,10 @@ class D3PMLVBLoss(KLDivLoss):
     """
     def __init__(self, tmax=500, reduction='batchmean', log_target=False, tokenizer=Tokenizer()):
         self.tmax = tmax
-        self.tokenizer = Tokenizer
+        self.tokenizer = tokenizer
         self.K = self.tokenizer.K
         super().__init__(reduction=reduction, log_target=log_target)
+        self.reconstruction_loss = CrossEntropyLoss(weight=None, reduction='mean')
     
     def forward(self, src_onehot, q, predicitons, tgt, tgt_onehot, timestep, Q, Q_bar):
         p = torch.nn.functional.softmax(predicitons[:, :, :self.K], dim=2)
@@ -41,7 +42,7 @@ class D3PMLVBLoss(KLDivLoss):
         for i in range(tgt.shape[0]): # loop over batch
             if timestep[i] == 1:
                 # CE (L_t=0)
-                r_loss = CrossEntropyLoss(predicitons[i].unsqueeze(0), tgt[i].unsqueeze(0))
+                r_loss = self.reconstruction_loss(predicitons[i], tgt[i])
                 losses.append(r_loss)
             elif timestep[i] == self.tmax:
                 # D KL (L_T)
@@ -52,6 +53,7 @@ class D3PMLVBLoss(KLDivLoss):
             else:
                 # D KL (L_t-1) -> (q(x|x_t, x_0), p_theta)
                 pred = p[i]
+                pred = pred.to(torch.float64)
                 x_t = src_onehot[i]
                 x_0 = tgt_onehot[i]
 

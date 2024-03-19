@@ -10,7 +10,8 @@ from constants import ALL_AAS, AMB_AAS, CAN_AAS
 from utils import Tokenizer
 
 # path to dataset
-path = '/Users/madsfrandsen/Documents/BSc_project/protein_generation/alignments/BLAT_ECOLX_1_b0.5.a2m'
+# path = '/Users/madsfrandsen/Documents/BSc_project/protein_generation/alignments/BLAT_ECOLX_1_b0.5.a2m'
+path = '/content/drive/MyDrive/BLAT_ECOLX_1_b0.5.a2m'
 
 
 def parse_fasta(path):
@@ -29,7 +30,7 @@ def parse_fasta(path):
                     sequences.append(sequence)
                     sequence = ''
             else:
-                sequence += line.replace('.', '-').upper()
+                sequence += line.upper().replace('.', '-').replace('Z', 'X')
         
         # Add last line to the list
         if sequence:
@@ -72,6 +73,20 @@ class ProteinSequenceDataset(Dataset):
 
 
 class Collater(object):
+    """
+    Collater for generating batch data according to markov process according to Austin et al.
+    inputs:
+        sequences : list of sequences
+        tokenizer: Tokenizer()
+        num_timesteps: number of diffusion timesteps
+
+    outputs:
+        src : source  masked sequences (model input)
+        timesteps: (D-t+1) term
+        tokenized: tokenized sequences (target seq)
+        Q : markov matrix
+        q_x : forward transition probabilities
+    """
     def __init__(self, tokenizer=Tokenizer(), num_steps=500, Q=None, Q_bar=None):
         self.tokenizer=tokenizer
         self.num_steps = num_steps
@@ -79,13 +94,20 @@ class Collater(object):
         self.Q = Q
         self.Q_bar = Q_bar
     
-    def __call__(self, sequences):
+    def __call__(self, data):
+
+        sequences = [x[0] for x in data]
+        names = [x[1] for x in data]
+
+        assert len(sequences) == len(names)
+
         tokenized = [torch.tensor(self.tokenizer.tokenize(s)) for s in sequences]
         one_hot = torch.stack([self.tokenizer.one_hot(seq) for seq in tokenized])
 
         src = []
         timesteps = []
         q_x = []
+        src_one_hot = []
 
         for i, t in enumerate(tokenized):
             x = one_hot[i]
@@ -95,12 +117,15 @@ class Collater(object):
             x_t, q_x_t = sample_transition_matrix(x, self.Q_bar[t])
             src.append(x_t)
             q_x.append(q_x_t)
+            src_one_hot.append(self.tokenizer.one_hot(x_t))
         
         src = torch.stack(src).to(torch.long)
+        src_one_hot = torch.stack(src_one_hot).to(torch.double)
         q_x = torch.stack(q_x).to(torch.double)
         timesteps = torch.tensor(timesteps, dtype=torch.long)
+        tokenized = torch.stack(tokenized).to(torch.long)
 
-        return src, one_hot, timesteps, tokenized.to(torch.long), self.Q, self.Q_bar, q_x
+        return src, src_one_hot, timesteps, tokenized, one_hot, self.Q, self.Q_bar, q_x, names
 
 
 
