@@ -97,10 +97,10 @@ class Collater(object):
             q_x.append(q_x_t)
         
         src = torch.stack(src).to(torch.long)
-        q_x = torch.stack(q_x).to(torch.long)
-        timesteps = torch.tensor(timesteps)
+        q_x = torch.stack(q_x).to(torch.double)
+        timesteps = torch.tensor(timesteps, dtype=torch.long)
 
-        return src, one_hot, timesteps, tokenized, q_x
+        return src, one_hot, timesteps, tokenized.to(torch.long), self.Q, self.Q_bar, q_x
 
 
 

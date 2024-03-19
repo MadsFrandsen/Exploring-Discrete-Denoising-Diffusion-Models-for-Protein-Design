@@ -35,6 +35,7 @@ def _beta_schedule(num_steps, start=1e-5, end=0.999, schedule='linear'):
     elif schedule == 'sohl-dickstein':
         betas = torch.linspace(0, num_steps-1, num_steps)
         betas = 1/(num_steps - betas + 1)
+        return betas
     else:
         raise NotImplementedError(type)
 

@@ -20,8 +20,8 @@ class D3PMLVBLoss(KLDivLoss):
             - src_one_hot: (B, L, K) original seq one hot encoded
             - q: (B, L, K) forward prob dist
             - predictions: (B, L, K) model predictions
-            - tgt: (B, L) corrupted MSA tokenized
-            - tgt_one_hot: (B, L, K) corrupted MSA one hot encoded
+            - tgt: (B, L) corrupted sequence tokenized
+            - tgt_one_hot: (B, L, K) corrupted sequence one hot encoded
             - timestep (B)
             - Q (K, K) transition matrix
             - Q_bar (K, K) transition matrix accounting for time
