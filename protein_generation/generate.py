@@ -1,6 +1,5 @@
-import numpy as np
 import torch
-import tqdm
+from tqdm import tqdm
 from utils import Tokenizer
 
 
@@ -21,7 +20,7 @@ def generate_d3pm(model, tokenizer, Q, Q_bar, timesteps, seq_len, device, batch_
     timesteps = torch.linspace(timesteps-1, 1, int((timesteps-1)/1), dtype=int)
     timesteps = timesteps.to(device)
     with torch.no_grad():
-        for t in tqdm(timesteps):
+        for t in timesteps:
             timesteps = torch.tensor([t] * batch_size).to(device)
             predictions = model(sample, timesteps)
             p = predictions[:, :, :tokenizer.K]
@@ -30,7 +29,7 @@ def generate_d3pm(model, tokenizer, Q, Q_bar, timesteps, seq_len, device, batch_
             x_tminus1 = sample.clone()
             for i, s in enumerate(sample):
                 x_t_b = tokenizer.one_hot(s)
-                A = torch.mm(x_t_b, torch.t[Q[t]]) # [P x K]
+                A = torch.mm(x_t_b, torch.t(Q[t])) # [P x K]
                 Q_expand = Q_bar[t-1].unsqueeze(0).expand(A.shape[0], tokenizer.K, tokenizer.K) # [P x K x K]
                 B_pred = torch.mul(p[i].unsqueeze(2), Q_expand)
                 q_t = torch.mul(A.unsqueeze(1), B_pred) # [P x K x K]
@@ -48,7 +47,7 @@ def sample_and_save(out_path, num_seqs, model, tokenizer, Q, Q_bar, timesteps, s
     string = []
     sample = []
 
-    for _ in tqdm(range(num_seqs)):
+    for _ in range(num_seqs):
 
         i_sample, i_string = generate_d3pm(model, tokenizer, Q, Q_bar, timesteps, seq_len, device, batch_size=1)
         string.append(i_string)

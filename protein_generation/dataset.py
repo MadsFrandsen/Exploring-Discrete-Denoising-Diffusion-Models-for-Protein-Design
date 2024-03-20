@@ -129,19 +129,3 @@ class Collater(object):
 
         return src, src_one_hot, timesteps, tokenized, one_hot, self.Q, self.Q_bar, q_x, names
 
-
-
-# for seq in data:
-#     if any(aa in AMB_AAS for aa in seq):
-#         print('Found AA')
-
-
-# for seq in data:
-#     for aa in seq:
-#         if aa == 'Z':
-#             print(seq)
-
-
-# for seq in data:
-#     print(seq)
-
