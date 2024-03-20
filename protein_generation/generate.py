@@ -41,4 +41,19 @@ def generate_d3pm(model, tokenizer, Q, Q_bar, timesteps, seq_len, device, batch_
 
         untokenized = [tokenizer.untokenize(s) for s in sample]
         return sample, untokenized
-                
+
+
+
+def sample_and_save(out_path, num_seqs, model, tokenizer, Q, Q_bar, timesteps, seq_len, device, batch_size=3):
+    string = []
+    sample = []
+
+    for _ in tqdm(range(num_seqs)):
+
+        i_sample, i_string = generate_d3pm(model, tokenizer, Q, Q_bar, timesteps, seq_len, device, batch_size=1)
+        string.append(i_string)
+        sample.append(i_sample)
+    
+    with open(out_path + 'generated_samples_string.fasta', 'w') as f:
+        for i, _s, in enumerate(string):
+            f.write('>SEQUENCE_' + str(i) + '\n' + str(_s[0]) + '\n')
