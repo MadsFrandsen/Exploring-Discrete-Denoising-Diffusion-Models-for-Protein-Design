@@ -31,24 +31,24 @@ stages:
 # These are typically the settings you want to modify for each of your jobs, together with some settings in the align stage.
 global:
     # mandatory output prefix of the job (e.g. output/HRAS will store outputs in folder "output", using files prefixed with "HRAS")
-  prefix: output/BLAT
+    prefix: output/BLAT
 
     # mandatory sequence identifier (mandatory, even if sequence_file is given)
-  sequence_id: QUERY_P62593/24-286
+    sequence_id: BLAT_ECOLX/24-286 # QUERY_P62593/24-286
 
     # optional FASTA file with target sequence (if blank, will fetch try to fetch sequence_id from databases.sequence_download_url)
     # if sequence_file is set, sequence_id must be defined, but can be arbitrary identifier (does not have to match ID in file)
-  sequence_file: ./BLAT_ECOLX_1_b0.5_labeled_allcaps_alldash.fasta
+    sequence_file: ./BLAT_ECOLX_1_b0.5_labeled_allcaps_alldash.fasta
 
     # cut to subregion of sequence (specify as list, e.g. [24, 286], leave blank for full sequence)
-  region:
+    region:
 
     # Clustering threshold for downweighting redudant sequences (Meff computation). E.g. 0.8 will cluster sequences
     # at a 80% sequence identity cutoff
-  theta: 1.0
+    theta: 1.0
 
     # number of cores to use. If running through evcouplings application, will be overriden by environment.cores
-  cpu: 5
+    cpu: 
 
 # Specify multiple batch jobs (if empty, only a single job will be run). Each entry (e.g. b_0.75) will be appended to
 # global.prefix to uniquely identify the subjob. Parameters for individual stages that should be overridden for each
@@ -417,10 +417,10 @@ databases:
 
 # Paths to external tools used by evcouplings. Please refer to README.md for installation instructions and which tools are required.
 tools:
-  jackhmmer: /opt/miniconda3/envs/samplequality/bin/jackhmmer
+  jackhmmer: /usr/local/bin/jackhmmer
   plmc: ./plmc/bin/plmc
-  hmmbuild: /opt/miniconda3/envs/samplequality/bin/hmmbuild
-  hmmsearch: /opt/miniconda3/envs/samplequality/bin/hmmsearch
+  hmmbuild: /usr/local/bin/hmmbuild
+  hmmsearch: /usr/local/bin/hmmsearch
 #     hhfilter: /n/groups/marks/pipelines/evcouplings/software/hh-suite/bin/hhfilter
 #     psipred: /home/hdm692/Software/miniconda3/envs/evcouplings/bin/psipred/runpsipred
 #     cns: /n/groups/marks/pipelines/evcouplings/software/cns_solve_1.21/intel-x86_64bit-linux/bin/cns

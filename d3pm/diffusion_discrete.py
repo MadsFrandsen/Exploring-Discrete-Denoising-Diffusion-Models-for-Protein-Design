@@ -352,7 +352,7 @@ class DiscreteDiffusion:
             raise NotImplementedError(self.model_output)
         
         if self.model_prediction == 'x_start':
-             # Predict the logits of p(x_{t-1}|x_t) by parameterizing this distribution
+            # Predict the logits of p(x_{t-1}|x_t) by parameterizing this distribution
             # as ~ sum_{pred_x_start} q(x_{t-1}, x_t |pred_x_start)p(pred_x_start|x_t)
             pred_x_start_logits = model_logits
 
@@ -381,7 +381,7 @@ class DiscreteDiffusion:
         return model_logits, pred_x_start_logits
 
     # === Sampling ===
-
+    @torch.no_grad()
     def p_sample(self, model_fn, *, x, t, noise):
         """Sample one timestep from the model p(x_{t-1} | x_t)."""
         model_logits, pred_x_start_logits = self.p_logits(
@@ -402,9 +402,9 @@ class DiscreteDiffusion:
         assert pred_x_start_logits.shape == model_logits.shape
         return sample, F.softmax(pred_x_start_logits, dim=-1)
 
-
+    @torch.no_grad()
     def p_sample_loop(self, model_fn, *, shape,
-                      num_timesteps=None, return_x_init=False):
+                      num_timesteps=None, return_x_init=False, return_im_steps=False, save_interval=None):
         """Ancestral sampling."""
 
         noise_shape = shape + (self.num_pixel_vals,)
@@ -439,8 +439,17 @@ class DiscreteDiffusion:
             num_timesteps = self.num_timesteps
         
         final_x = x_init
-        for i in range(num_timesteps):
-            final_x = body_fun(i, final_x)
+        if return_im_steps and save_interval is not None:
+            images = []
+            images.append(final_x.detach().cpu())
+            for i in range(num_timesteps):
+                final_x = body_fun(i, final_x)
+                if (i+1) % save_interval == 0:
+                    images.append(final_x.detach().cpu())
+            return images
+        else:
+            for i in range(num_timesteps):
+                final_x = body_fun(i, final_x)
         
         assert final_x.shape == shape
         if return_x_init:
@@ -572,21 +581,39 @@ class DiscreteDiffusion:
         assert losses.shape == t.shape
         return losses
 
-
+    @torch.no_grad()
     def calc_bpd_loop(self, model_fn, *, x_start):
         """Calculate variational bound (loop over all timesteps and sum)."""
         
         batch_size = x_start.shape[0]
+
+        # vbterms = []
+        # noise_shape = x_start.shape + (self.num_pixel_vals, )
+        # for t in list(range(self.num_timesteps))[::-1]:
+        #     t_batch = torch.full((batch_size,), t, device=self.device)
+        #     noise = torch.rand(noise_shape, device=self.device)
+        #     x_t = self.q_sample(x_start=x_start, t=t_batch, noise=noise)
+        #     with torch.no_grad():
+        #         vb, _ = self.vb_terms_bpd(model_fn=model_fn, x_start=x_start, t=t_batch, x_t=x_t)
+        #     assert vb.shape == (batch_size,)
+        #     vbterms.append(vb)
+        # print(len(vbterms))
+        # vbterms = torch.stack(vbterms, dim=1)
+        # print(vbterms.shape)
+        # return 0
+
+
 
         # Initialize a tensor to store variational bounds for each timestep
         vbterms_tb = torch.empty((self.num_timesteps, batch_size), dtype=torch.float32, device=self.device)
         for t in range(self.num_timesteps):
             # Calculate VB term at the current timestep
             noise = torch.rand(x_start.shape + (self.num_pixel_vals,), device=self.device)
-            vb, _ = self.vb_terms_bpd(
-                model_fn=model_fn, x_start=x_start, t=torch.full((batch_size,), t, dtype=torch.int32, device=self.device),
-                x_t=self.q_sample(x_start=x_start, t=torch.full((batch_size,), t, dtype=torch.int32, device=self.device), noise=noise)
-            )
+            with torch.no_grad():
+                vb, _ = self.vb_terms_bpd(
+                    model_fn=model_fn, x_start=x_start, t=torch.full((batch_size,), t, dtype=torch.int32, device=self.device),
+                    x_t=self.q_sample(x_start=x_start, t=torch.full((batch_size,), t, dtype=torch.int32, device=self.device), noise=noise)
+                )
             vbterms_tb[t] = vb
 
         vbterms_bt = vbterms_tb.T

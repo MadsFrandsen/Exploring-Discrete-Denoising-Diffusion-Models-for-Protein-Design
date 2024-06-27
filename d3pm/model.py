@@ -29,7 +29,7 @@ from torch import nn
 import torch.nn.functional as F
 
 from labml_helpers.module import Module
-
+from einops import rearrange
 import utils
 
 

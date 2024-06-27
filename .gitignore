@@ -1,9 +1,11 @@
 data/
 venv/
+evcouplings_venv/
 trained_models/
 alignments/
 *.DS_Store
 old_functions.py
+EVcouplings/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
